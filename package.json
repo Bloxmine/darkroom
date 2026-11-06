@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc -b",
+    "snap": "node scripts/snap.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.1",
@@ -35,5 +38,10 @@
     "vite": "^8.3.6",
     "vite-plugin-pwa": "^2.0.0",
     "vitest": "^5.1.0"
+  },
+  "description": "Node-based, shader-based image editor: wire up GPU nodes to make photos look like they came from old cameras.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Bloxmine/darkroom.git"
   }
 }
