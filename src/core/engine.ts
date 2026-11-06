@@ -53,6 +53,9 @@ interface CpuEntry {
   error?: string;
 }
 
+/** Built-in uniform names; params whose `u_<key>` would collide get no auto-uniform (use `uniforms()` instead). */
+const RESERVED = new Set(['u_resolution', 'u_scale', 'u_time', 'u_iteration', 'u_prev']);
+
 const UNIFORM_TYPES: Partial<Record<ParamDef['type'], string>> = {
   float: 'float',
   int: 'int',
@@ -297,7 +300,7 @@ export class Engine {
     const paramUniforms: Record<string, UniformValue> = {};
     for (const [k, p] of Object.entries(def.params)) {
       const v = node.params[k] ?? p.default;
-      if (!UNIFORM_TYPES[p.type]) continue;
+      if (!UNIFORM_TYPES[p.type] || RESERVED.has('u_' + k)) continue;
       if (p.type === 'enum') paramUniforms['u_' + k] = Math.max(0, p.options?.indexOf(String(v)) ?? 0);
       else if (p.type === 'bool') paramUniforms['u_' + k] = v ? 1 : 0;
       else paramUniforms['u_' + k] = v as UniformValue;
@@ -405,7 +408,7 @@ export class Engine {
     cpuNames.forEach((n) => sampler('u_' + n));
     for (const [k, p] of params) {
       const t = UNIFORM_TYPES[p.type];
-      if (t) lines.push(`uniform ${t} u_${k};`);
+      if (t && !RESERVED.has('u_' + k)) lines.push(`uniform ${t} u_${k};`);
     }
     return lines.join('\n') + '\n' + GLSL_LIB + '\n#line 1\n';
   }

@@ -65,7 +65,8 @@ export default [
 - `u_pass0`, `u_pass1`, …: outputs of earlier passes of this node.
 - For each texture key returned by `cpu()`: `u_<key>` / `u_<key>_size`.
 - For each param: `float→float`, `int→int`, `bool→bool`, `color→vec4`, `vec2→vec2`,
-  `enum→int` (index into `options`). Named `u_<paramKey>`. `string`/`asset`/`curve` params get no uniform.
+  `enum→int` (index into `options`). Named `u_<paramKey>`. Params whose name collides with a built-in
+  (`scale`, `time`, `resolution`, `iteration`, `prev`) get NO auto-uniform — pass them via `uniforms()` under another name. `string`/`asset`/`curve` params get no uniform.
 - Library (see `src/core/glsl.ts`): `luma`, `luma601`, `saturate`, `srgbToLinear`, `linearToSrgb`,
   `rgb2yiq/yiq2rgb`, `rgb2yuv/yuv2rgb`, `rgb2ycbcr/ycbcr2rgb`, `rgb2hsv/hsv2rgb`, `rgb2hsl/hsl2rgb`,
   `kelvinToRgb`, `hash11/12/22/32/13`, `gaussRand`, `valueNoise`, `gradNoise`, `fbm(p, octaves)`,
