@@ -1,0 +1,259 @@
+/**
+ * Darkroom core types — the contract shared by the engine, the editor UI,
+ * built-in nodes, presets, custom nodes and plugins.
+ *
+ * Colour convention: all images flow through the graph as display-referred
+ * sRGB-encoded RGBA in [0,1] (premultiplied alpha is NOT used). Textures are
+ * RGBA16F where supported, so intermediate values may exceed 1.
+ */
+
+/** Socket types. `mask` is an image where only `.r` matters (0..1). */
+export type PortType = 'image' | 'mask';
+
+export interface PortDef {
+  type: PortType;
+  label?: string;
+  /** Optional inputs may stay unconnected; their sampler is bound to a 1x1 texture (see `fallback`). */
+  optional?: boolean;
+  /** What an unconnected optional input samples as. Default 'black' (0,0,0,0) for image, 'white' for mask. */
+  fallback?: 'black' | 'white' | 'transparent' | 'gray';
+}
+
+export type ParamType =
+  | 'float'
+  | 'int'
+  | 'bool'
+  | 'color' // [r,g,b,a] 0..1, uniform vec4
+  | 'vec2' // [x,y], uniform vec2
+  | 'enum' // string value from options; uniform int = index into options
+  | 'string' // no uniform; for CPU nodes (e.g. text)
+  | 'asset' // asset id string (image or file); no uniform; for CPU nodes
+  | 'curve'; // array of [x,y] control points 0..1; no uniform (bake via cpu()) — see color.curves
+
+export interface ParamDef {
+  type: ParamType;
+  default: ParamValue;
+  label?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  /** For enum. */
+  options?: string[];
+  /** Short help text shown as tooltip. */
+  description?: string;
+  /** Hide from properties panel (still saved). */
+  hidden?: boolean;
+  /** For 'asset': accepted file types, e.g. 'image/*' or '.cube'. */
+  accept?: string;
+  /** For 'string': render as multiline textarea. */
+  multiline?: boolean;
+  /** For float/int: values are in *pixels at full resolution* (UI hint only; shader must multiply by u_scale). */
+  pixels?: boolean;
+}
+
+export type ParamValue = number | boolean | string | number[] | number[][] | null;
+export type Params = Record<string, ParamValue>;
+
+/** Anything that can be uploaded to a texture. */
+export type TexSource =
+  | ImageBitmap
+  | HTMLImageElement
+  | HTMLCanvasElement
+  | OffscreenCanvas
+  | ImageData
+  | RawTex;
+
+export interface RawTex {
+  width: number;
+  height: number;
+  /** RGBA, row 0 = top of image. Float32Array → RGBA16F/32F, Uint8Array → RGBA8. */
+  data: Float32Array | Uint8Array;
+  /** Default 'linear'. */
+  filter?: 'linear' | 'nearest';
+}
+
+export type UniformValue = number | boolean | number[];
+
+export interface PassContext {
+  params: Params;
+  /** Output size (pixels) of the node at the current render scale. */
+  width: number;
+  height: number;
+  /** Render scale = current render resolution / full resolution (1 at export). */
+  scale: number;
+  /** Sizes of connected inputs keyed by input name (at current scale). */
+  inputSizes: Record<string, { width: number; height: number }>;
+  /** Sizes of passes already rendered in this node, by index. */
+  passSizes: { width: number; height: number }[];
+}
+
+export interface ShaderPass {
+  /**
+   * GLSL ES 3.00 fragment source *body*. The engine prepends a header with:
+   *   precision highp float; in vec2 v_uv; out vec4 fragColor;
+   *   uniform vec2 u_resolution;   // this pass's output size in px
+   *   uniform float u_scale;       // render scale (multiply pixel-unit params by this)
+   *   uniform float u_time;        // seconds, for animated previews (0 at export)
+   *   uniform sampler2D u_<input>; uniform vec2 u_<input>_size;   // every node input
+   *   uniform sampler2D u_pass<N>; uniform vec2 u_pass<N>_size;   // earlier passes of this node
+   *   uniform sampler2D u_prev;    uniform vec2 u_prev_size;      // previous pass (or first input on pass 0)
+   *   uniform sampler2D u_<cpuKey>; uniform vec2 u_<cpuKey>_size; // textures returned by cpu()
+   *   uniform <type> u_<param>;    // every param with a uniform type (float,int,bool,color,vec2,enum)
+   *   plus the shared library in core/glsl.ts (luma, rgb2yiq, hash, noise, blend modes...)
+   * Must define `void main()` and write `fragColor`.
+   * May be a function of params when the source itself depends on them (e.g. an expression node);
+   * compiled programs are cached by source text.
+   */
+  frag: string | ((params: Params) => string);
+  /** Output size of this pass. Default: node output size. Return [w,h]. */
+  size?: (ctx: PassContext) => [number, number];
+  /** Texture filtering when this pass is *sampled* by later passes/nodes. Default 'linear'. */
+  filter?: 'linear' | 'nearest';
+  /** Extra uniforms computed in JS (e.g. derived values). */
+  uniforms?: (ctx: PassContext) => Record<string, UniformValue>;
+  /** Which node output this pass writes. Default: the last pass writes the first output. */
+  output?: string;
+  /** Repeat this pass N times (ping-pong; u_prev is the previous iteration). */
+  repeat?: (ctx: PassContext) => number;
+}
+
+export interface CpuContext {
+  params: Params;
+  scale: number;
+  /** Full-resolution (scale 1) project size. */
+  projectSize: { width: number; height: number };
+  /** Resolve an asset id to its loaded data. */
+  getAsset: (id: string) => Asset | undefined;
+  /** Read back an input image as RGBA float pixels (slow; use sparingly). */
+  readInput: (name: string) => RawTex | null;
+}
+
+export interface NodeDef {
+  /** Globally unique, namespaced: 'color.levels', 'analog.vhsChroma', 'myplugin.foo'. */
+  id: string;
+  name: string;
+  category: string;
+  description?: string;
+  /** Search keywords. */
+  tags?: string[];
+  inputs: Record<string, PortDef>;
+  /** Default: { out: { type: 'image' } }. */
+  outputs?: Record<string, PortDef>;
+  params: Record<string, ParamDef>;
+  /** GPU passes, executed in order. Omit for pure-CPU nodes. */
+  passes?: ShaderPass[];
+  /**
+   * CPU step. Returns textures keyed by name.
+   *  - If the node has `passes`, these become extra samplers `u_<key>`.
+   *  - If the node has no passes, keys must match output names (e.g. { out }).
+   * Results are cached by params + input versions. May be async (the engine re-renders when it resolves).
+   */
+  cpu?: (ctx: CpuContext) => Record<string, TexSource> | Promise<Record<string, TexSource>>;
+  /** Set true if cpu() uses readInput (forces recompute when inputs change). */
+  cpuReadsInputs?: boolean;
+  /**
+   * Output size at FULL resolution. Default: size of first connected image input,
+   * else the project size. The engine multiplies by render scale.
+   */
+  size?: (ctx: { params: Params; inputSizes: Record<string, { width: number; height: number }>; projectSize: { width: number; height: number }; getAsset: (id: string) => Asset | undefined }) => [number, number];
+  /** Node colour accent in the editor (CSS colour). */
+  color?: string;
+  /** Hidden from the add-node menu (e.g. group internals). */
+  hidden?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Graph document
+// ---------------------------------------------------------------------------
+
+export interface GraphNode {
+  id: string;
+  type: string; // NodeDef id, or 'core.group'
+  params: Params;
+  position: { x: number; y: number };
+  /** User-given title. */
+  label?: string;
+  /** Pass first image input straight through. */
+  bypass?: boolean;
+  /** Collapsed UI state. */
+  collapsed?: boolean;
+  /** Only for type 'core.group'. */
+  group?: GroupData;
+}
+
+export interface Edge {
+  id: string;
+  from: { node: string; port: string };
+  to: { node: string; port: string };
+}
+
+export interface Graph {
+  nodes: GraphNode[];
+  edges: Edge[];
+}
+
+/**
+ * A group (subgraph / macro). Its inputs are the `core.groupInput` nodes inside
+ * (param `name`), its outputs the `core.groupOutput` nodes (param `name`).
+ * Exposed params appear on the group node and override inner node params.
+ */
+export interface GroupData {
+  name: string;
+  graph: Graph;
+  exposed: ExposedParam[];
+}
+
+export interface ExposedParam {
+  /** Param key on the group node. */
+  key: string;
+  label?: string;
+  node: string; // inner node id
+  param: string; // inner param key
+  /** Optional overrides of the inner ParamDef (min/max/etc). */
+  def?: Partial<ParamDef>;
+}
+
+export interface Asset {
+  id: string;
+  name: string;
+  mime: string;
+  /** Decoded image, if an image. */
+  image?: ImageBitmap;
+  /** Raw text, if a text file (e.g. .cube). */
+  text?: string;
+  /** Data URL for saving inside the project. */
+  dataUrl: string;
+  width?: number;
+  height?: number;
+}
+
+export interface Project {
+  version: 1;
+  name: string;
+  graph: Graph;
+  /** Asset ids → serialized assets (dataUrl). */
+  assets: Record<string, { id: string; name: string; mime: string; dataUrl: string }>;
+  /** Node whose output is shown/exported. Default: the first core.output node. */
+  outputNode?: string;
+}
+
+/** A preset is a ready-made group the user can drop into the graph. */
+export interface PresetDef {
+  id: string; // 'camera.ccd2002'
+  name: string;
+  category: string; // 'Camera', 'Video', 'Fun'...
+  description?: string;
+  tags?: string[];
+  /** Built group. Must contain one groupInput named 'image' and one groupOutput named 'out'. */
+  group: GroupData;
+}
+
+export interface PluginDef {
+  id: string;
+  name: string;
+  version: string;
+  author?: string;
+  description?: string;
+  nodes?: NodeDef[];
+  presets?: PresetDef[];
+}
