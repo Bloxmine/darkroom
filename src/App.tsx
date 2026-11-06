@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import './App.css';
+import './ui/themes/mac.css';
+import './ui/themes/aperture.css';
+import './ui/themes/aqua.css';
 import * as A from './store/actions';
 import { useDoc } from './store/doc';
 import { importImageFiles } from './store/io';
@@ -7,6 +10,7 @@ import { useUi } from './store/ui';
 import { Splitter, StatusBar } from './ui/Chrome';
 import { graphApi, handleKeyDown } from './ui/commands';
 import { Dialogs } from './ui/Dialogs';
+import { ExtensionsHost } from './ui/PluginManager';
 import { GraphEditor } from './ui/GraphEditor';
 import { Library } from './ui/Library';
 import { MenuBar } from './ui/MenuBar';
@@ -117,6 +121,7 @@ export default function App({ ready }: { ready: boolean }) {
       </div>
       <StatusBar />
       <Dialogs />
+      <ExtensionsHost />
       {!ready && (
         <div className="modal-backdrop light">
           <div className="window loading">

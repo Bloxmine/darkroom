@@ -2,8 +2,10 @@ import { GROUP } from '../core/graph';
 import * as A from '../store/actions';
 import { currentGraph, redo, undo, useDoc } from '../store/doc';
 import { importImageDialog, openProjectFile, saveProjectFile, newProject } from '../store/io';
+import { setTheme, THEMES, useSettings } from '../store/settings';
 import { openDialog, status, useUi } from '../store/ui';
 import { zoomViewer } from './viewerApi';
+import { canEditInBuilder, exportNodeType, importNodeFile, openNodeBuilder } from '../store/extensions';
 
 /** Imperative hooks registered by the graph editor (fit view, quick-add at cursor…). */
 export const graphApi = {
@@ -75,6 +77,7 @@ def({
   run: A.deleteSelection,
   enabled: () => hasSel() || useDoc.getState().edgeSelection.length > 0,
 });
+def({ id: 'edit.prefs', label: 'Preferences…', icon: 'setting_tools', keys: 'Ctrl+,', run: () => openDialog('prefs') });
 def({ id: 'edit.selectAll', label: 'Select All', icon: 'table_select_all', keys: 'Ctrl+A', run: A.selectAll });
 def({ id: 'edit.group', label: 'Group Selection', icon: 'shape_group', keys: 'Ctrl+G', run: A.groupSelection, enabled: hasSel });
 def({
@@ -133,6 +136,18 @@ def({
   checked: () => useUi.getState().showProperties,
 });
 
+// View › Theme (radio group)
+for (const t of THEMES)
+  def({
+    id: 'view.theme.' + t.id,
+    label: t.label,
+    run: () => {
+      setTheme(t.id);
+      status(`Theme: ${t.label}`);
+    },
+    checked: () => useSettings.getState().theme === t.id,
+  });
+
 // Node
 def({ id: 'node.add', label: 'Add Node…', icon: 'add', keys: 'Tab', run: () => graphApi.openQuickAdd() });
 def({ id: 'node.bypass', label: 'Toggle Bypass', icon: 'link_break', keys: 'B', run: () => A.toggleBypass(), enabled: hasSel });
@@ -147,6 +162,14 @@ def({
     status('Viewing project output.');
   },
 });
+
+// Node › custom nodes, Edit › Plugins (phase 5)
+const selType = () => selNodes()[0]?.type ?? '';
+def({ id: 'node.newCustom', label: 'New Custom Node…', icon: 'script_add', run: () => openNodeBuilder() });
+def({ id: 'node.editType', label: 'Edit Node Type…', icon: 'script_edit', run: () => openNodeBuilder(selType()), enabled: () => canEditInBuilder(selType()) });
+def({ id: 'node.importType', label: 'Import Node Type…', icon: 'script_import', run: () => void importNodeFile() });
+def({ id: 'node.exportType', label: 'Export Node Type…', icon: 'script_export', run: () => exportNodeType(selType()), enabled: () => canEditInBuilder(selType()) });
+def({ id: 'edit.plugins', label: 'Plugins…', icon: 'plugin', run: () => openDialog('plugins') });
 
 // Help
 def({ id: 'help.shortcuts', label: 'Keyboard Shortcuts', icon: 'keyboard', keys: 'F1', run: () => openDialog('shortcuts') });

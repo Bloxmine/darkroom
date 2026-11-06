@@ -1,0 +1,359 @@
+{
+  "format": "darkroom-plugin",
+  "id": "example.shaderPack",
+  "name": "Example Shader Pack",
+  "version": "1.0.0",
+  "author": "Darkroom examples",
+  "description": "Three shader-only nodes (Duotone, Sobel Glow, Kaleidoscope) and a Neon Night preset.",
+  "nodes": [
+    {
+      "id": "example.duotone",
+      "name": "Duotone",
+      "category": "Color",
+      "description": "Maps luminance onto a shadow\u2192highlight colour ramp (example shader pack).",
+      "tags": [
+        "gradient map",
+        "two tone",
+        "poster"
+      ],
+      "inputs": {
+        "image": {
+          "type": "image"
+        }
+      },
+      "params": {
+        "shadow": {
+          "type": "color",
+          "default": [
+            0.09,
+            0.05,
+            0.3,
+            1
+          ],
+          "label": "Shadows"
+        },
+        "highlight": {
+          "type": "color",
+          "default": [
+            1,
+            0.62,
+            0.38,
+            1
+          ],
+          "label": "Highlights"
+        },
+        "contrast": {
+          "type": "float",
+          "default": 1.1,
+          "min": 0,
+          "max": 3,
+          "label": "Contrast"
+        },
+        "amount": {
+          "type": "float",
+          "default": 1,
+          "min": 0,
+          "max": 1,
+          "label": "Amount"
+        }
+      },
+      "passes": [
+        {
+          "frag": "// Map luminance onto a two-colour ramp.\nvoid main() {\n  vec4 c = texture(u_image, v_uv);\n  float l = clamp((luma(c.rgb) - 0.5) * u_contrast + 0.5, 0.0, 1.0);\n  vec3 d = mix(u_shadow.rgb, u_highlight.rgb, l);\n  fragColor = vec4(mix(c.rgb, d, u_amount), c.a);\n}\n"
+        }
+      ]
+    },
+    {
+      "id": "example.sobelGlow",
+      "name": "Sobel Glow",
+      "category": "Stylize",
+      "description": "Neon edges: Sobel edge detection at half resolution plus a soft glow (2 passes).",
+      "tags": [
+        "edges",
+        "neon",
+        "outline",
+        "tron"
+      ],
+      "inputs": {
+        "image": {
+          "type": "image"
+        }
+      },
+      "params": {
+        "threshold": {
+          "type": "float",
+          "default": 0.12,
+          "min": 0,
+          "max": 1,
+          "label": "Threshold"
+        },
+        "width": {
+          "type": "float",
+          "default": 1.5,
+          "min": 0.5,
+          "max": 8,
+          "pixels": true,
+          "label": "Edge width"
+        },
+        "edgeColor": {
+          "type": "color",
+          "default": [
+            0.25,
+            0.9,
+            1,
+            1
+          ],
+          "label": "Edge colour"
+        },
+        "useImageColor": {
+          "type": "bool",
+          "default": false,
+          "label": "Use image colour"
+        },
+        "glowRadius": {
+          "type": "float",
+          "default": 14,
+          "min": 0,
+          "max": 80,
+          "pixels": true,
+          "label": "Glow radius"
+        },
+        "glow": {
+          "type": "float",
+          "default": 1.4,
+          "min": 0,
+          "max": 4,
+          "label": "Glow"
+        },
+        "edge": {
+          "type": "float",
+          "default": 1,
+          "min": 0,
+          "max": 2,
+          "label": "Edge strength"
+        },
+        "darken": {
+          "type": "float",
+          "default": 0.55,
+          "min": 0,
+          "max": 1,
+          "label": "Darken image"
+        }
+      },
+      "passes": [
+        {
+          "frag": "// Pass 0 (half resolution): Sobel edge magnitude, coloured.\nvoid main() {\n  vec2 px = max(u_width * u_scale, 1.0) / u_image_size;\n  float tl = luma(texture(u_image, v_uv + px * vec2(-1.0, -1.0)).rgb);\n  float t  = luma(texture(u_image, v_uv + px * vec2( 0.0, -1.0)).rgb);\n  float tr = luma(texture(u_image, v_uv + px * vec2( 1.0, -1.0)).rgb);\n  float l  = luma(texture(u_image, v_uv + px * vec2(-1.0,  0.0)).rgb);\n  float r  = luma(texture(u_image, v_uv + px * vec2( 1.0,  0.0)).rgb);\n  float bl = luma(texture(u_image, v_uv + px * vec2(-1.0,  1.0)).rgb);\n  float b  = luma(texture(u_image, v_uv + px * vec2( 0.0,  1.0)).rgb);\n  float br = luma(texture(u_image, v_uv + px * vec2( 1.0,  1.0)).rgb);\n  float gx = -tl - 2.0 * l - bl + tr + 2.0 * r + br;\n  float gy = -tl - 2.0 * t - tr + bl + 2.0 * b + br;\n  float e = smoothstep(u_threshold, u_threshold + 0.25, length(vec2(gx, gy)));\n  vec3 col = u_useImageColor ? saturate(texture(u_image, v_uv).rgb * 1.6) : u_edgeColor.rgb;\n  fragColor = vec4(col * e, 1.0);\n}\n",
+          "size": {
+            "scale": 0.5
+          }
+        },
+        {
+          "frag": "// Pass 1 (full size): blur the edges into a glow and add them over the darkened image.\nvoid main() {\n  vec4 src = texture(u_image, v_uv);\n  float r = max(u_glowRadius * u_scale, 0.5);\n  vec2 px = 1.0 / u_resolution;\n  vec3 glow = vec3(0.0);\n  float wsum = 0.0;\n  for (int y = -5; y <= 5; y++) {\n    for (int x = -5; x <= 5; x++) {\n      vec2 o = vec2(float(x), float(y)) * r / 5.0;\n      float w = exp(-2.0 * dot(o, o) / (r * r));\n      glow += texture(u_pass0, v_uv + o * px).rgb * w;\n      wsum += w;\n    }\n  }\n  glow /= wsum;\n  vec3 edge = texture(u_pass0, v_uv).rgb;\n  vec3 base = src.rgb * (1.0 - u_darken);\n  fragColor = vec4(base + edge * u_edge + glow * u_glow, src.a);\n}\n"
+        }
+      ]
+    },
+    {
+      "id": "example.kaleidoscope",
+      "name": "Kaleidoscope",
+      "category": "Distort",
+      "description": "Mirrors the image into N wedges around a centre point.",
+      "tags": [
+        "mirror",
+        "symmetry",
+        "mandala"
+      ],
+      "inputs": {
+        "image": {
+          "type": "image"
+        }
+      },
+      "params": {
+        "segments": {
+          "type": "int",
+          "default": 6,
+          "min": 2,
+          "max": 24,
+          "label": "Segments"
+        },
+        "rotation": {
+          "type": "float",
+          "default": 0,
+          "min": -180,
+          "max": 180,
+          "label": "Rotation"
+        },
+        "zoom": {
+          "type": "float",
+          "default": 1,
+          "min": 0.25,
+          "max": 4,
+          "label": "Zoom"
+        },
+        "center": {
+          "type": "vec2",
+          "default": [
+            0.5,
+            0.5
+          ],
+          "step": 0.01,
+          "label": "Centre"
+        },
+        "edges": {
+          "type": "enum",
+          "options": [
+            "repeat",
+            "mirror"
+          ],
+          "default": "mirror",
+          "label": "Edges"
+        }
+      },
+      "passes": [
+        {
+          "frag": "// Fold the image into mirrored wedges around a centre.\nvoid main() {\n  vec2 asp = vec2(u_resolution.x / u_resolution.y, 1.0);\n  vec2 p = (v_uv - u_center) * asp / max(u_zoom, 0.01);\n  float r = length(p);\n  float seg = TAU / float(max(u_segments, 1));\n  float a = mod(atan(p.y, p.x) + radians(u_rotation), seg);\n  a = abs(a - seg * 0.5);\n  vec2 uv = vec2(cos(a), sin(a)) * r / asp + u_center;\n  uv = u_edges == 0 ? fract(uv) : 1.0 - abs(1.0 - mod(uv, 2.0));\n  fragColor = texture(u_image, uv);\n}\n"
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "id": "example.neonNight",
+      "name": "Neon Night",
+      "category": "Fun",
+      "description": "Sobel Glow edges over a deep duotone (example shader pack).",
+      "tags": [
+        "neon",
+        "edges"
+      ],
+      "group": {
+        "name": "Neon Night",
+        "exposed": [
+          {
+            "key": "glow",
+            "label": "Glow",
+            "node": "sobel",
+            "param": "glow"
+          },
+          {
+            "key": "threshold",
+            "label": "Edge threshold",
+            "node": "sobel",
+            "param": "threshold"
+          },
+          {
+            "key": "edgeColor",
+            "label": "Edge colour",
+            "node": "sobel",
+            "param": "edgeColor"
+          },
+          {
+            "key": "shadow",
+            "label": "Shadow tint",
+            "node": "duo",
+            "param": "shadow"
+          },
+          {
+            "key": "amount",
+            "label": "Duotone amount",
+            "node": "duo",
+            "param": "amount"
+          }
+        ],
+        "graph": {
+          "nodes": [
+            {
+              "id": "in_image",
+              "type": "core.groupInput",
+              "params": {
+                "name": "image",
+                "type": "image"
+              },
+              "position": {
+                "x": 0,
+                "y": 0
+              }
+            },
+            {
+              "id": "duo",
+              "type": "example.duotone",
+              "params": {
+                "shadow": [
+                  0.04,
+                  0.02,
+                  0.16,
+                  1
+                ],
+                "highlight": [
+                  0.55,
+                  0.45,
+                  0.9,
+                  1
+                ],
+                "amount": 0.85
+              },
+              "position": {
+                "x": 260,
+                "y": 0
+              }
+            },
+            {
+              "id": "sobel",
+              "type": "example.sobelGlow",
+              "params": {},
+              "position": {
+                "x": 520,
+                "y": 0
+              }
+            },
+            {
+              "id": "out_out",
+              "type": "core.groupOutput",
+              "params": {
+                "name": "out"
+              },
+              "position": {
+                "x": 780,
+                "y": 0
+              }
+            }
+          ],
+          "edges": [
+            {
+              "id": "e1",
+              "from": {
+                "node": "in_image",
+                "port": "out"
+              },
+              "to": {
+                "node": "duo",
+                "port": "image"
+              }
+            },
+            {
+              "id": "e2",
+              "from": {
+                "node": "duo",
+                "port": "out"
+              },
+              "to": {
+                "node": "sobel",
+                "port": "image"
+              }
+            },
+            {
+              "id": "e3",
+              "from": {
+                "node": "sobel",
+                "port": "out"
+              },
+              "to": {
+                "node": "out_out",
+                "port": "in"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

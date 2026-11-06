@@ -235,6 +235,46 @@ export interface Project {
   assets: Record<string, { id: string; name: string; mime: string; dataUrl: string }>;
   /** Node whose output is shown/exported. Default: the first core.output node. */
   outputNode?: string;
+  /** Custom / data-plugin node types used by this project, embedded so it opens on other machines. */
+  customNodes?: SerializedNodeDef[];
+  /** Plugins that provided node types used by this project (for "missing plugin" messages). */
+  plugins?: ProjectPluginRef[];
+}
+
+/** A pass in JSON form (no functions). See core/serialize.ts. */
+export interface SerializedPass {
+  /** GLSL body. May still contain `uniform … u_<param>; // @param …` lines; they are stripped on load. */
+  frag: string;
+  /** Declarative size: `scale` × node output size, or fixed full-res `width`/`height` (× render scale). */
+  size?: { scale?: number; width?: number; height?: number };
+  filter?: 'linear' | 'nearest';
+  output?: string;
+  /** Fixed count, or the key of an int/float param. */
+  repeat?: number | string;
+}
+
+/** A NodeDef in JSON form: string frags, no functions. Used by custom nodes, data plugins and projects. */
+export interface SerializedNodeDef {
+  id: string;
+  name: string;
+  category: string;
+  description?: string;
+  tags?: string[];
+  inputs: Record<string, PortDef>;
+  outputs?: Record<string, PortDef>;
+  params: Record<string, ParamDef>;
+  passes: SerializedPass[];
+  color?: string;
+  hidden?: boolean;
+}
+
+export interface ProjectPluginRef {
+  id: string;
+  name?: string;
+  version?: string;
+  url?: string;
+  /** Node type ids from this plugin used by the project. */
+  nodes: string[];
 }
 
 /** A preset is a ready-made group the user can drop into the graph. */

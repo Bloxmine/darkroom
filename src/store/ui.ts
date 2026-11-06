@@ -9,7 +9,7 @@ export const QUALITY_LABELS: Record<Quality, string> = {
   full: 'Full resolution (1:1)',
 };
 
-export type DialogId = 'export' | 'about' | 'shortcuts' | 'confirmNew' | null;
+export type DialogId = 'export' | 'about' | 'shortcuts' | 'confirmNew' | 'prefs' | 'plugins' | null;
 
 export interface QuickAddState {
   /** Screen (client) position of the popup. */

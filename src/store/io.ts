@@ -7,6 +7,7 @@ import { setSelection } from './doc';
 import { commitGraph, commitProject, emptyProject, markSaved, outputNodeId, setProject, useDoc } from './doc';
 import { engine, previewScale, requestRender, resetRenderSize } from './engine';
 import { status, useUi } from './ui';
+import { projectForSave, registerProjectTypes } from './extensions';
 
 const serial = (a: Asset) => ({ id: a.id, name: a.name, mime: a.mime, dataUrl: a.dataUrl });
 
@@ -29,20 +30,22 @@ export async function hydrateAssets(p: Project) {
 export function validateProject(x: unknown): Project {
   const p = x as Project;
   if (!p || typeof p !== 'object' || !p.graph || !Array.isArray(p.graph.nodes) || !Array.isArray(p.graph.edges)) throw new Error('Not a Darkroom project file.');
-  return { version: 1, name: p.name ?? 'Untitled', graph: p.graph, assets: p.assets ?? {}, outputNode: p.outputNode };
+  return { version: 1, name: p.name ?? 'Untitled', graph: p.graph, assets: p.assets ?? {}, outputNode: p.outputNode, customNodes: p.customNodes, plugins: p.plugins };
 }
 
 export async function loadProject(p: Project, opts: { viewed?: string | null; dirty?: boolean } = {}) {
+  const typeMsgs = registerProjectTypes(p); // embedded custom node types
   await hydrateAssets(p);
   engine?.clearCache();
   resetRenderSize();
   setProject(p, opts);
   useUi.setState({ fit: true });
   requestRender();
+  if (typeMsgs.length) setTimeout(() => status(typeMsgs.join(' ')), 50); // after the caller's "Opened…"
 }
 
 export function serializeProject(): string {
-  return JSON.stringify(useDoc.getState().project);
+  return JSON.stringify(projectForSave(useDoc.getState().project));
 }
 
 function download(blob: Blob, name: string) {

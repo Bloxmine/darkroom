@@ -20,6 +20,7 @@ import * as A from '../store/actions';
 import { currentGraph, effectiveViewed, outputNodeId, setSelection, useDoc } from '../store/doc';
 import { flatId, localIdForFlat } from '../store/graphPath';
 import { importImageFiles } from '../store/io';
+import { THEME_META, useSettings } from '../store/settings';
 import { useUi } from '../store/ui';
 import { Panel } from './Chrome';
 import { graphApi } from './commands';
@@ -77,6 +78,7 @@ function Flow() {
   const loadCount = useDoc((s) => s.loadCount);
   const errors = useUi((s) => s.errors);
   const pending = useUi((s) => s.pending);
+  const tm = THEME_META[useSettings((s) => s.theme)];
   const wrap = useRef<HTMLDivElement>(null);
   const mouse = useRef<{ x: number; y: number; inside: boolean }>({ x: 0, y: 0, inside: false });
   const ctx = useContextMenu();
@@ -313,17 +315,17 @@ function Flow() {
         defaultEdgeOptions={{ type: 'default' }}
         fitView
       >
-        <Background variant={BackgroundVariant.Lines} gap={20} color="#666" lineWidth={1} />
-        <Background id="major" variant={BackgroundVariant.Lines} gap={100} color="#595959" lineWidth={1} />
+        <Background variant={BackgroundVariant.Lines} gap={20} color={tm.grid} lineWidth={1} />
+        <Background id="major" variant={BackgroundVariant.Lines} gap={100} color={tm.gridMajor} lineWidth={1} />
         <MiniMap
           pannable
           zoomable
           className="minimap"
           nodeColor={(n) => nodeColor((n.data as DrNode['data']).node.type)}
-          nodeStrokeColor="#222"
-          nodeBorderRadius={0}
-          maskColor="rgba(40,40,40,0.55)"
-          bgColor="#7a7a7a"
+          nodeStrokeColor={tm.minimapStroke}
+          nodeBorderRadius={tm.minimapRadius}
+          maskColor={tm.minimapMask}
+          bgColor={tm.minimapBg}
         />
       </ReactFlow>
       {graph.nodes.length === 0 && (

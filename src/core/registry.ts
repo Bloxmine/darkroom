@@ -37,6 +37,25 @@ export function unregisterNode(id: string) {
   if (nodes.delete(id)) changed();
 }
 
+export function unregisterPreset(id: string) {
+  if (presets.delete(id)) changed();
+}
+
+export function unregisterPlugin(id: string) {
+  if (plugins.delete(id)) changed();
+}
+
+/** Optional hint provider (set by core/customNodes) naming the plugin a missing node type came from. */
+let missingHint: (type: string) => string | undefined = () => undefined;
+export function setMissingNodeHint(fn: (type: string) => string | undefined) {
+  missingHint = fn;
+}
+/** Human-readable error for a node whose type is not registered. */
+export function missingNodeMessage(type: string): string {
+  const hint = missingHint(type);
+  return hint ? `Unknown node type "${type}" — ${hint}` : `Unknown node type "${type}" (missing plugin?)`;
+}
+
 export function registerPreset(def: PresetDef, opts: { replace?: boolean } = {}) {
   if (presets.has(def.id) && !opts.replace) {
     console.warn(`[darkroom] preset "${def.id}" already registered; skipping`);

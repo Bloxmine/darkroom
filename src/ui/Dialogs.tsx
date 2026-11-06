@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { listNodeDefs, listPresets } from '../core/registry';
 import { useDoc } from '../store/doc';
 import { EXT, exportImage, measureOutput, newProject, type ExportType } from '../store/io';
+import { setTheme, THEMES, useSettings, type ThemeId } from '../store/settings';
 import { closeDialog, status, useUi } from '../store/ui';
 import { commands, displayKeys } from './commands';
 import { Icon } from './Icon';
@@ -195,7 +196,7 @@ function AboutDialog() {
 
 const SHORTCUT_GROUPS: { title: string; ids: string[] }[] = [
   { title: 'File', ids: ['file.new', 'file.open', 'file.save', 'file.import', 'file.export'] },
-  { title: 'Edit', ids: ['edit.undo', 'edit.redo', 'edit.cut', 'edit.copy', 'edit.paste', 'edit.duplicate', 'edit.delete', 'edit.selectAll'] },
+  { title: 'Edit', ids: ['edit.undo', 'edit.redo', 'edit.cut', 'edit.copy', 'edit.paste', 'edit.duplicate', 'edit.delete', 'edit.selectAll', 'edit.prefs'] },
   { title: 'Nodes & Groups', ids: ['node.add', 'node.bypass', 'node.view', 'node.viewOutput', 'edit.group', 'edit.ungroup', 'edit.enterGroup', 'edit.exitGroup'] },
   { title: 'View', ids: ['view.fitGraph', 'view.fitImage', 'view.actual', 'view.zoomIn', 'view.zoomOut', 'view.compare', 'view.library', 'view.properties'] },
 ];
@@ -319,11 +320,74 @@ function ConfirmNewDialog() {
   );
 }
 
+/** Preferences: theme (applied live; Cancel reverts). */
+function PrefsDialog() {
+  const theme = useSettings((s) => s.theme);
+  const [initial] = useState(theme);
+  const cancel = () => {
+    setTheme(initial);
+    closeDialog();
+  };
+  const info = THEMES.find((t) => t.id === theme);
+  return (
+    <Dialog
+      title="Preferences"
+      icon="setting_tools"
+      onClose={cancel}
+      width={400}
+      buttons={
+        <>
+          <button className="btn default" onClick={closeDialog} autoFocus>
+            OK
+          </button>
+          <button className="btn" onClick={cancel}>
+            Cancel
+          </button>
+        </>
+      }
+    >
+      <fieldset className="groupbox">
+        <legend>Appearance</legend>
+        <div className="pref-row">
+          <label htmlFor="pref-theme">Theme:</label>
+          <select id="pref-theme" className="field select" value={theme} onChange={(e) => setTheme(e.target.value as ThemeId)}>
+            {THEMES.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="pref-row">
+          <span />
+          <span className="muted small">{info?.description}</span>
+        </div>
+        <div className="pref-row">
+          <span />
+          <span className="theme-swatches">
+            {THEMES.map((t) => (
+              <button key={t.id} className={'theme-swatch' + (t.id === theme ? ' active' : '')} data-swatch={t.id} title={t.label} onClick={() => setTheme(t.id)}>
+                <span className="ts-bar" />
+                <span className="ts-body">
+                  <span className="ts-side" />
+                  <span className="ts-view" />
+                </span>
+              </button>
+            ))}
+          </span>
+        </div>
+      </fieldset>
+      <p className="muted small">The theme is also available under View › Theme and is remembered in this browser.</p>
+    </Dialog>
+  );
+}
+
 export function Dialogs() {
   const d = useUi((s) => s.dialog);
   if (d === 'export') return <ExportDialog />;
   if (d === 'about') return <AboutDialog />;
   if (d === 'shortcuts') return <ShortcutsDialog />;
   if (d === 'confirmNew') return <ConfirmNewDialog />;
+  if (d === 'prefs') return <PrefsDialog />;
   return null;
 }

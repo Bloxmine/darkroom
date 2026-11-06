@@ -1,0 +1,280 @@
+/* Node Builder + Plugin Manager. Colours come only from the theme's CSS custom
+   properties; structure reuses .window/.dialog/.groupbox/.grid-table/.btn. */
+
+/* ---- Node Builder (non-modal floating window) ---- */
+.node-builder {
+  position: fixed;
+  z-index: 1400;
+  /* anchored low so the viewer (top of the window) stays visible for live preview; draggable */
+  left: max(10px, calc(50vw - 490px));
+  bottom: 30px;
+  width: min(980px, calc(100vw - 20px));
+  height: min(580px, calc(100vh - 40px));
+  max-height: none;
+}
+.nb-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.nb-toolbar .field.select {
+  width: auto;
+}
+.nb-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  background: var(--field);
+}
+.nb-state.bad {
+  color: var(--error);
+}
+.nb-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 8px;
+  overflow: hidden;
+}
+.nb-left {
+  width: 330px;
+  flex: none;
+  overflow: auto;
+  padding-right: 2px;
+}
+.nb-right {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.nb-grid {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  gap: 4px 6px;
+  align-items: center;
+}
+.nb-grid > label {
+  text-align: right;
+}
+.nb-desc {
+  resize: vertical;
+  font-family: var(--font) !important;
+}
+.nb-invalid {
+  border-color: var(--error) !important;
+}
+.nb-err,
+.nb-problem.error {
+  color: var(--error);
+}
+.nb-note {
+  margin-bottom: 6px;
+  border: 1px solid var(--line);
+  background: var(--field);
+}
+.nb-inputs .field.select {
+  width: 100%;
+}
+.nb-center {
+  text-align: center;
+}
+.nb-add {
+  margin-top: 4px;
+}
+.nb-params td,
+.nb-params th {
+  white-space: nowrap;
+}
+.nb-params-box {
+  overflow-x: auto;
+}
+.nb-mono {
+  font-family: var(--mono);
+  font-size: 10px;
+}
+.nb-empty {
+  padding: 4px 0;
+  line-height: 1.5;
+}
+.nb-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  min-height: 24px;
+  border-bottom: 1px solid var(--lo);
+}
+.nb-tab {
+  height: 21px;
+  padding: 0 10px;
+  border: 1px solid var(--lo);
+  border-bottom: none;
+  background: var(--face);
+  color: var(--text);
+  border-radius: 3px 3px 0 0;
+  margin-bottom: -1px;
+}
+.nb-tab.active {
+  background: var(--field);
+  height: 23px;
+  font-weight: bold;
+}
+.nb-tab.has-error {
+  color: var(--error);
+}
+.nb-passopts {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding-bottom: 2px;
+  white-space: nowrap;
+}
+.nb-passopts .field.select {
+  width: auto;
+}
+.nb-num {
+  width: 52px !important;
+}
+.nb-repeat {
+  width: 60px !important;
+}
+.nb-editor,
+.glsl-editor {
+  flex: 1;
+  min-height: 160px;
+  overflow: hidden;
+  border: 1px solid var(--lo);
+  background: var(--field);
+  user-select: text;
+}
+.glsl-editor .cm-editor {
+  height: 100%;
+}
+.nb-problems {
+  max-height: 92px;
+  min-height: 22px;
+  overflow: auto;
+  background: var(--field);
+  border: 1px solid var(--lo);
+  padding: 2px 4px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  user-select: text;
+}
+.nb-problem {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 1px 0;
+  cursor: default;
+  white-space: pre-wrap;
+}
+.nb-problem.warn {
+  color: color-mix(in srgb, var(--error) 60%, var(--text));
+}
+.nb-problem.ok {
+  color: var(--muted);
+}
+.nb-cheat summary {
+  cursor: default;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+}
+.nb-cheat-body {
+  max-height: 170px;
+  overflow: auto;
+  padding: 2px 4px;
+  border: 1px solid var(--line);
+  background: var(--field);
+  user-select: text;
+}
+.nb-cheat-body code {
+  white-space: normal;
+}
+.nb-left-btn {
+  margin-right: auto;
+}
+
+/* ---- Plugin Manager ---- */
+.pm-section {
+  margin-bottom: 8px;
+}
+.pm-table td {
+  vertical-align: top;
+}
+.pm-table .pm-name {
+  font-weight: bold;
+}
+.pm-desc {
+  color: var(--muted);
+  font-size: 10.5px;
+}
+.pm-status-error,
+.pm-warn {
+  color: var(--error);
+  font-size: 10.5px;
+}
+.pm-tier {
+  display: inline-block;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  background: var(--face);
+  font-size: 10px;
+}
+.pm-tier.code {
+  border-color: var(--error);
+  color: var(--error);
+}
+.pm-scroll {
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid var(--lo);
+}
+.pm-url {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-top: 6px;
+}
+.pm-url .field.text {
+  flex: 1;
+}
+.pm-actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.pm-actions .btn + .btn {
+  margin-left: 0;
+}
+.pm-trust pre {
+  max-height: 160px;
+  overflow: auto;
+  margin: 6px 0;
+  padding: 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+  background: var(--field);
+  border: 1px solid var(--lo);
+  user-select: text;
+  white-space: pre-wrap;
+}
+.pm-trust .pm-source {
+  font-family: var(--mono);
+  word-break: break-all;
+}
+.pm-builtin {
+  columns: 2;
+  font-size: 10.5px;
+}
+.pm-builtin div {
+  break-inside: avoid;
+}

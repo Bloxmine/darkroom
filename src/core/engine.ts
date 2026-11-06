@@ -1,7 +1,7 @@
 import { GL, ShaderCompileError, type Tex } from './gl';
 import { GLSL_LIB } from './glsl';
 import { flattenGraph, getPorts, IMAGE, OUTPUT } from './graph';
-import { getNodeDef, subscribeRegistry } from './registry';
+import { getNodeDef, missingNodeMessage, subscribeRegistry } from './registry';
 import type { Asset, Graph, GraphNode, NodeDef, ParamDef, PassContext, RawTex, TexSource, UniformValue } from './types';
 
 export interface RenderOptions {
@@ -202,7 +202,7 @@ export class Engine {
     projectSize: { width: number; height: number },
   ): CacheEntry | null {
     const def = getNodeDef(node.type);
-    if (!def) throw new Error(`Unknown node type "${node.type}" (missing plugin?)`);
+    if (!def) throw new Error(missingNodeMessage(node.type));
     this.errors.delete(node.id);
 
     // --- inputs

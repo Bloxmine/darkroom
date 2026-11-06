@@ -16,6 +16,7 @@ import { NumField } from './NumField';
 import { Icon, nodeIcon } from './Icon';
 import { useContextMenu, type MenuItem } from './Menu';
 import { useRegistry } from './useRegistry';
+import { CustomTypeRow, NodeErrorNote } from './CustomTypeInfo';
 
 // ---------------------------------------------------------------------------
 // Generic fields
@@ -360,11 +361,7 @@ export function Properties() {
           </div>
         </div>
         {(def?.description || (isGroup && node.group)) && <div className="props-desc">{def?.description ?? `Group of ${node.group!.graph.nodes.length} nodes.`}</div>}
-        {!def && !isGroup && (
-          <div className="pnote error">
-            <Icon name="error" /> Unknown node type “{node.type}”. It may come from a plugin that is not loaded.
-          </div>
-        )}
+        <NodeErrorNote node={node} flatId={fid} unknown={!def && !isGroup} />
 
         <Section title="Node" icon="cog">
           <div className="prow">
@@ -408,6 +405,7 @@ export function Properties() {
               </div>
             </div>
           )}
+          <CustomTypeRow node={node} />
           <div className="prow">
             <div className="plabel">Ports</div>
             <div className="pwidget muted small">

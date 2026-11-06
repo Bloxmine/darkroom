@@ -3,6 +3,7 @@ import { listNodeDefs, listPresets } from '../core/registry';
 import { GROUP_INPUT, GROUP_OUTPUT } from '../core/graph';
 import { addNode, freeSpot } from '../store/actions';
 import { useDoc } from '../store/doc';
+import { THEMES, useSettings } from '../store/settings';
 import { useUi } from '../store/ui';
 import { graphApi } from './commands';
 import { categoryIcon, nodeIcon } from './Icon';
@@ -81,6 +82,9 @@ const MENUS: { title: string; items: () => MenuItem[] }[] = [
       { cmd: 'edit.ungroup' },
       { cmd: 'edit.enterGroup' },
       { cmd: 'edit.exitGroup' },
+      { sep: true },
+      { cmd: 'edit.plugins' },
+      { cmd: 'edit.prefs' },
     ],
   },
   {
@@ -97,6 +101,8 @@ const MENUS: { title: string; items: () => MenuItem[] }[] = [
       { sep: true },
       { cmd: 'view.library' },
       { cmd: 'view.properties' },
+      { sep: true },
+      { label: 'Theme', icon: 'palette', submenu: () => THEMES.map((t) => ({ cmd: 'view.theme.' + t.id })) },
     ],
   },
   {
@@ -109,11 +115,16 @@ const MENUS: { title: string; items: () => MenuItem[] }[] = [
       { cmd: 'node.bypass' },
       { cmd: 'node.view' },
       { cmd: 'node.viewOutput' },
+      { sep: true },
+      { cmd: 'node.newCustom' },
+      { cmd: 'node.editType' },
+      { cmd: 'node.importType' },
+      { cmd: 'node.exportType' },
     ],
   },
   {
     title: 'Window',
-    items: () => [{ cmd: 'view.library' }, { cmd: 'view.properties' }],
+    items: () => [{ cmd: 'view.library' }, { cmd: 'view.properties' }, { sep: true }, { cmd: 'edit.plugins' }],
   },
   {
     title: 'Help',
@@ -126,6 +137,7 @@ export function MenuBar() {
   useRegistry();
   useDoc((s) => s.past.length + s.future.length + s.selection.length + s.path.length); // refresh enabled states
   useUi((s) => s.compare);
+  useSettings((s) => s.theme);
   const close = () => setOpen(null);
   return (
     <div className="menubar" onMouseDown={(e) => e.stopPropagation()}>

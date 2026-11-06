@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { GROUP } from '../core/graph';
 import { nodeName } from '../store/actions';
 import { effectiveViewed, outputNodeId, useDoc } from '../store/doc';
-import { compareSource, engineError, imageRect, requestRender, viewerCanvas } from '../store/engine';
+import { compareSource, engine, engineError, imageRect, requestRender, viewerCanvas } from '../store/engine';
 import { graphAt } from '../store/graphPath';
+import { themeMeta, useSettings } from '../store/settings';
 import { QUALITY_LABELS, useUi, type Quality } from '../store/ui';
 import { Panel } from './Chrome';
 import { Icon } from './Icon';
@@ -27,6 +28,14 @@ function useViewedName() {
   });
   const [name, path] = key.split('\u0000');
   return { name, path };
+}
+
+// The viewer clear colour follows the UI theme. store/engine.ts passes a fixed
+// background to Engine.present(), so substitute the theme's colour here.
+if (engine) {
+  const present = engine.present.bind(engine);
+  engine.present = (tex, opts) => present(tex, { ...opts, background: themeMeta().viewerBg });
+  useSettings.subscribe((s, p) => s.theme !== p.theme && requestRender());
 }
 
 const ZOOMS = [0.125, 0.25, 0.5, 1, 2, 4, 8];
