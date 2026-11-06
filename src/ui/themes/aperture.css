@@ -166,6 +166,15 @@
   --m-node-group: #5b5b5b;
   --m-node-unknown-a: #4a2c2c;
   --m-node-unknown-b: #3c2424;
+  /* node thumbnails */
+  --thumb-bg: rgba(0, 0, 0, 0.28);
+  --thumb-line: var(--m-node-line);
+  --thumb-chk-a: #5a5a5a;
+  --thumb-chk-b: #3e3e3e;
+  --thumb-frame: rgba(0, 0, 0, 0.85);
+  --thumb-frame-hover: var(--m-sel-flat);
+  --thumb-muted: var(--m-node-sub);
+  --thumb-port-radius: 6px;
   --m-handle-border: #0b0b0b;
   --m-edge: #9a9a9a;
   --m-edge-mask: #6a9ad8;

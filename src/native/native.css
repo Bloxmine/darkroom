@@ -1,0 +1,20 @@
+/*
+ * macOS desktop app (Electron, titleBarStyle: hiddenInset). <html class="native-mac"> is set
+ * pre-paint by index.html. The native menu bar replaces the in-app one, so the toolbar is
+ * the top row: it doubles as the window's title bar (drag region) and leaves room for the
+ * traffic lights (positioned by electron/main.ts: trafficLightPosition {x: 14, y: 12}).
+ */
+html.native-mac .toolbar {
+  -webkit-app-region: drag;
+  height: 38px;
+  padding-left: 80px;
+  user-select: none;
+}
+html.native-mac .toolbar-grip {
+  display: none;
+}
+/* anything interactive inside the drag region must opt out, or clicks become window drags */
+html.native-mac .toolbar :is(button, input, select, textarea, label, a, .tbtn, .field, [role='button']),
+html.native-mac :is(.modal-backdrop, .menu, .window, [role='menu'], [role='dialog']) {
+  -webkit-app-region: no-drag;
+}

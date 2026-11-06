@@ -1,6 +1,7 @@
 import { defineNode } from '../../core/registry';
 import type { NodeDef, PassContext } from '../../core/types';
 import { F, glowPasses, num } from './_shared';
+import { ANIMATE_PARAM, animFloat, animSeed, drift, pnum } from '../../core/motion';
 
 const C = '#c98bff';
 const img = { image: { type: 'image' as const } };
@@ -180,8 +181,10 @@ const grain = defineNode({
     chroma: { type: 'float', default: 0.25, min: 0, max: 1, step: 0.01, label: 'Colour', description: '0 = monochrome grain, 1 = independent per-channel grain.' },
     response: { type: 'float', default: 0.8, min: 0, max: 1, step: 0.01, label: 'Midtone response', description: 'How much grain is concentrated in the midtones (0 = even everywhere).' },
     seed: { type: 'int', default: 1, min: 0, max: 9999, step: 1, label: 'Seed' },
+    animate: ANIMATE_PARAM,
   },
   passes: [{
+    uniforms: (c) => animSeed(c, 1), // fresh grain every frame in motion
     frag: F(`
 float field(vec2 p, float r) {
   float a = gnoise(p), b = gnoise(p * 0.5 + 31.7), c = gnoise(p * 2.0 + 71.3);
@@ -331,8 +334,11 @@ const lightLeak = defineNode({
     color: { type: 'color', default: [1, 0.25, 0.04, 1], label: 'Colour' },
     hotColor: { type: 'color', default: [1, 0.78, 0.35, 1], label: 'Core colour' },
     seed: { type: 'int', default: 3, min: 0, max: 9999, step: 1, label: 'Seed' },
+    animate: ANIMATE_PARAM,
   },
   passes: [{
+    // in motion: the leak wanders slowly along its edge and flickers
+    uniforms: (c) => animFloat(c, (t) => ({ u_position: pnum(c, 'position', 0.35) + drift(t * 0.15, 1) * 0.08, u_intensity: pnum(c, 'intensity', 0.8) * (1 + 0.25 * drift(t * 6, 2)) })),
     frag: F(`
 void main() {
   vec4 src = texture(u_image, v_uv);
@@ -571,8 +577,10 @@ const scanlines = defineNode({
     beam: { type: 'float', default: 0.5, min: 0, max: 1, step: 0.01, label: 'Beam bloom' },
     phase: { type: 'float', default: 0, min: 0, max: 1, step: 0.01, label: 'Phase' },
     direction: { type: 'enum', default: 'horizontal', options: ['horizontal', 'vertical'], label: 'Direction' },
+    roll: { type: 'float', default: 0, min: -60, max: 60, step: 0.1, label: 'Roll (lines/s)', description: 'Scroll the lines over time during playback / video export.' },
   },
   passes: [{
+    uniforms: (c) => animFloat(c, (t): Record<string, number> => (pnum(c, 'roll', 0) ? { u_phase: pnum(c, 'phase', 0) - pnum(c, 'roll', 0) * t } : {})),
     frag: F(`
 float prof(float f, float sig) { return exp(-0.5 * f * f / (sig * sig)); }
 void main() {

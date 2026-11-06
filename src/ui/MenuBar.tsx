@@ -52,16 +52,19 @@ export function addNodeMenus(at: () => { x: number; y: number } = addAt): MenuIt
   return items;
 }
 
-const MENUS: { title: string; items: () => MenuItem[] }[] = [
+export const MENUS: { title: string; items: () => MenuItem[] }[] = [
   {
     title: 'File',
     items: () => [
       { cmd: 'file.new' },
       { cmd: 'file.open' },
       { cmd: 'file.save' },
+      { cmd: 'file.saveAs' },
       { sep: true },
       { cmd: 'file.import' },
       { cmd: 'file.export' },
+      { cmd: 'file.exportVideo' },
+      { cmd: 'file.batch' },
     ],
   },
   {
@@ -101,8 +104,24 @@ const MENUS: { title: string; items: () => MenuItem[] }[] = [
       { sep: true },
       { cmd: 'view.library' },
       { cmd: 'view.properties' },
+      { cmd: 'view.thumbnails' },
       { sep: true },
       { label: 'Theme', icon: 'palette', submenu: () => THEMES.map((t) => ({ cmd: 'view.theme.' + t.id })) },
+    ],
+  },
+  {
+    title: 'Playback',
+    items: () => [
+      { cmd: 'playback.toggle' },
+      { cmd: 'playback.prevFrame' },
+      { cmd: 'playback.nextFrame' },
+      { cmd: 'playback.start' },
+      { sep: true },
+      { cmd: 'playback.loop' },
+      { cmd: 'playback.realtime' },
+      { cmd: 'playback.animate' },
+      { sep: true },
+      { cmd: 'file.exportVideo' },
     ],
   },
   {
@@ -137,7 +156,7 @@ export function MenuBar() {
   useRegistry();
   useDoc((s) => s.past.length + s.future.length + s.selection.length + s.path.length); // refresh enabled states
   useUi((s) => s.compare);
-  useSettings((s) => s.theme);
+  useSettings((s) => s.pref);
   const close = () => setOpen(null);
   return (
     <div className="menubar" onMouseDown={(e) => e.stopPropagation()}>

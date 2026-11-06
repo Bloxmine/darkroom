@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "main": "dist-electron/main.mjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -10,7 +11,11 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc -b",
-    "snap": "node scripts/snap.mjs"
+    "snap": "node scripts/snap.mjs",
+    "electron:dev": "node scripts/electron-dev.mjs",
+    "electron:compile": "node scripts/build-electron.mjs",
+    "electron:build": "tsc -b && vite build --mode electron --outDir dist-app && node scripts/build-electron.mjs && electron-builder --mac --publish never",
+    "electron:icon": "node scripts/make-icns.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.1",
@@ -49,5 +54,99 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/Bloxmine/darkroom.git"
+  },
+  "build": {
+    "appId": "io.bloxmine.darkroom",
+    "productName": "Darkroom",
+    "copyright": "Darkroom contributors",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist-app/**/*",
+      "dist-electron/**/*",
+      "!dist-electron/*.map",
+      "package.json",
+      "!node_modules/**/*"
+    ],
+    "asar": true,
+    "npmRebuild": false,
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
+    "mac": {
+      "category": "public.app-category.photography",
+      "icon": "build/icon.icns",
+      "target": [
+        "dmg"
+      ],
+      "identity": null,
+      "hardenedRuntime": false,
+      "darkModeSupport": true,
+      "extendInfo": {
+        "NSCameraUsageDescription": "Darkroom uses the camera for live webcam input nodes.",
+        "NSMicrophoneUsageDescription": "Darkroom may record audio together with webcam video.",
+        "UTExportedTypeDeclarations": [
+          {
+            "UTTypeIdentifier": "io.bloxmine.darkroom.project",
+            "UTTypeDescription": "Darkroom Project",
+            "UTTypeConformsTo": [
+              "public.json",
+              "public.data"
+            ],
+            "UTTypeTagSpecification": {
+              "public.filename-extension": [
+                "darkroom"
+              ],
+              "public.mime-type": [
+                "application/x-darkroom-project"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "dmg": {
+      "title": "${productName} ${version}"
+    },
+    "fileAssociations": [
+      {
+        "ext": "darkroom",
+        "name": "Darkroom Project",
+        "description": "Darkroom Project",
+        "role": "Editor",
+        "rank": "Owner",
+        "mimeType": "application/x-darkroom-project"
+      },
+      {
+        "ext": [
+          "jpg",
+          "jpeg",
+          "png",
+          "webp",
+          "heic",
+          "heif",
+          "tif",
+          "tiff"
+        ],
+        "name": "Image",
+        "role": "Viewer",
+        "rank": "Alternate"
+      },
+      {
+        "ext": [
+          "dng",
+          "cr2",
+          "cr3",
+          "nef",
+          "arw",
+          "raf",
+          "orf",
+          "rw2"
+        ],
+        "name": "Camera RAW Image",
+        "role": "Viewer",
+        "rank": "Alternate"
+      }
+    ]
   }
 }

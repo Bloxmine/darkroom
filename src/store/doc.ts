@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { OUTPUT } from '../core/graph';
 import type { Graph, Project } from '../core/types';
 import { graphAt, updateGraphAt, validPath } from './graphPath';
+import { useSettings } from './settings';
 
 /**
  * The document store: project + editing context (group path, selection,
@@ -30,7 +31,7 @@ export interface DocState {
   loadCount: number;
 }
 
-export const emptyProject = (): Project => ({ version: 1, name: 'Untitled', graph: { nodes: [], edges: [] }, assets: {} });
+export const emptyProject = (): Project => ({ version: 1, name: useSettings.getState().defaultProjectName.trim() || 'Untitled', graph: { nodes: [], edges: [] }, assets: {} });
 
 export const useDoc = create<DocState>(() => ({
   project: emptyProject(),
@@ -44,7 +45,8 @@ export const useDoc = create<DocState>(() => ({
   loadCount: 0,
 }));
 
-const MAX_HISTORY = 200;
+/** Undo depth: Preferences › General. */
+const maxHistory = () => useSettings.getState().undoDepth;
 let lastCoalesce: { key: string; t: number } | null = null;
 
 const snap = (s: DocState): Snapshot => ({ project: s.project, path: s.path, viewed: s.viewed });
@@ -70,7 +72,7 @@ export function commitProject(fn: (p: Project) => Project, opts: CommitOpts = {}
   lastCoalesce = opts.coalesce ? { key: opts.coalesce, t: now } : null;
   useDoc.setState({
     project: next,
-    past: merge ? s.past : [...s.past.slice(-MAX_HISTORY + 1), snap(s)],
+    past: merge ? s.past : [...s.past.slice(-maxHistory() + 1), snap(s)],
     future: [],
     dirty: true,
   });

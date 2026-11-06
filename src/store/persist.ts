@@ -1,5 +1,6 @@
 import type { Project } from '../core/types';
 import { useDoc } from './doc';
+import { useSettings } from './settings';
 
 /** Debounced autosave of the project to IndexedDB, restored on startup. */
 const DB = 'darkroom';
@@ -65,7 +66,12 @@ export function startAutosave() {
   enabled = true;
   useDoc.subscribe((s, p) => {
     if (s.project === p.project && s.viewed === p.viewed) return;
+    const ms = useSettings.getState().autosaveMs; // Preferences › General: 0 = off; ≥10 s saves at most that often
+    if (!ms || (ms > 1000 && timer)) return;
     clearTimeout(timer);
-    timer = window.setTimeout(() => void writeAutosave().catch((e) => console.warn('[darkroom] autosave failed', e)), 800);
+    timer = window.setTimeout(() => {
+      timer = 0;
+      void writeAutosave().catch((e) => console.warn('[darkroom] autosave failed', e));
+    }, ms);
   });
 }

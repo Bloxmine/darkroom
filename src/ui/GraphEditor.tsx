@@ -3,6 +3,7 @@ import {
   applyNodeChanges,
   Background,
   BackgroundVariant,
+  ConnectionLineType,
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
@@ -16,6 +17,7 @@ import {
 import '@xyflow/react/dist/base.css';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getPorts, GROUP, OUTPUT, wouldCycle } from '../core/graph';
+import { getNodeDef } from '../core/registry';
 import * as A from '../store/actions';
 import { currentGraph, effectiveViewed, outputNodeId, setSelection, useDoc } from '../store/doc';
 import { flatId, localIdForFlat } from '../store/graphPath';
@@ -79,6 +81,11 @@ function Flow() {
   const errors = useUi((s) => s.errors);
   const pending = useUi((s) => s.pending);
   const tm = THEME_META[useSettings((s) => s.theme)];
+  // Preferences › Appearance
+  const wire = useSettings((s) => s.wireStyle);
+  const gridStyle = useSettings((s) => s.grid);
+  const minimap = useSettings((s) => s.minimap);
+  const tips = useSettings((s) => s.nodeTooltips);
   const wrap = useRef<HTMLDivElement>(null);
   const mouse = useRef<{ x: number; y: number; inside: boolean }>({ x: 0, y: 0, inside: false });
   const ctx = useContextMenu();
@@ -95,6 +102,11 @@ function Flow() {
       if (id) errBy.set(id, (errBy.has(id) ? errBy.get(id) + '\n\n' : '') + (k.includes('/') && k !== flatId(path, id) ? `[${k}] ` : '') + v);
     }
     const pend = new Set(pending.map((k) => localIdForFlat(path, k)).filter(Boolean));
+    // nodes of unknown type have no port defs: derive sockets from their edges so wires still draw
+    const edgePortsOf = (id: string) => ({
+      inputs: [...new Set(graph.edges.filter((e) => e.to.node === id).map((e) => e.to.port))],
+      outputs: [...new Set(graph.edges.filter((e) => e.from.node === id).map((e) => e.from.port))],
+    });
     setNodes((prev) => {
       const old = new Map(prev.map((n) => [n.id, n]));
       return graph.nodes.map((gn) => {
@@ -106,17 +118,19 @@ function Flow() {
           measured: o?.measured,
           selected: sel.has(gn.id),
           dragging: o?.dragging,
+          domAttributes: tips && getNodeDef(gn.type)?.description ? { title: `${getNodeDef(gn.type)!.name}: ${getNodeDef(gn.type)!.description}` } : undefined,
           data: {
             node: gn,
             viewed: viewed === flatId(path, gn.id),
             isOutput: !path.length && gn.type === OUTPUT && gn.id === outId,
             error: errBy.get(gn.id),
             pending: pend.has(gn.id),
+            edgePorts: gn.type !== GROUP && !getNodeDef(gn.type) ? edgePortsOf(gn.id) : undefined,
           },
         } satisfies DrNode;
       });
     });
-  }, [graph, selection, viewed, errors, pending, path, outId, regV]);
+  }, [graph, selection, viewed, errors, pending, path, outId, regV, tips]);
 
   const edgeSel = useDoc((s) => s.edgeSelection);
   useEffect(() => {
@@ -136,10 +150,11 @@ function Flow() {
           selected: es.has(e.id),
           className: (ptype === 'mask' ? 'edge-mask' : '') + (src?.bypass ? ' edge-bypass' : ''),
           style: src ? ({ '--edge-accent': nodeColor(src.type) } as React.CSSProperties) : undefined,
+          type: wire,
         };
       }),
     );
-  }, [graph, edgeSel]);
+  }, [graph, edgeSel, wire]);
 
   // Selection lives in the doc store (single source of truth); everything else is local RF state.
   const onNodesChange = useCallback((ch: NodeChange<DrNode>[]) => {
@@ -312,12 +327,14 @@ function Flow() {
         snapToGrid
         snapGrid={[10, 10]}
         connectionRadius={24}
-        defaultEdgeOptions={{ type: 'default' }}
+        defaultEdgeOptions={{ type: wire }}
+        connectionLineType={wire === 'default' ? ConnectionLineType.Bezier : (wire as ConnectionLineType)}
         fitView
       >
-        <Background variant={BackgroundVariant.Lines} gap={20} color={tm.grid} lineWidth={1} />
-        <Background id="major" variant={BackgroundVariant.Lines} gap={100} color={tm.gridMajor} lineWidth={1} />
-        <MiniMap
+        {gridStyle === 'lines' && <Background variant={BackgroundVariant.Lines} gap={20} color={tm.grid} lineWidth={1} />}
+        {gridStyle === 'lines' && <Background id="major" variant={BackgroundVariant.Lines} gap={100} color={tm.gridMajor} lineWidth={1} />}
+        {gridStyle === 'dots' && <Background variant={BackgroundVariant.Dots} gap={20} size={1.6} color={tm.gridDot} />}
+        {minimap && <MiniMap
           pannable
           zoomable
           className="minimap"
@@ -326,7 +343,7 @@ function Flow() {
           nodeBorderRadius={tm.minimapRadius}
           maskColor={tm.minimapMask}
           bgColor={tm.minimapBg}
-        />
+        />}
       </ReactFlow>
       {graph.nodes.length === 0 && (
         <div className="flow-empty">

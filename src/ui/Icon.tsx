@@ -52,6 +52,7 @@ export function categoryIcon(category: string): string {
 
 const TYPE_ICONS: Record<string, string> = {
   [IMAGE]: 'image',
+  'core.raw': 'camera',
   [OUTPUT]: 'monitor',
   [GROUP]: 'bricks',
   [GROUP_INPUT]: 'door_in',

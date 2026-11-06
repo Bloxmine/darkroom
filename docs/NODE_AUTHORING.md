@@ -59,6 +59,9 @@ export default [
 - `uniform float u_scale;` — render scale (preview < 1, export = 1). **Any param measured in pixels
   must be multiplied by `u_scale`** so preview and export match (mark such params `pixels: true`).
 - `uniform float u_time;` `uniform int u_iteration;` (index within a `repeat`ed pass).
+- `uniform int u_frame;` timeline frame index. `u_time`/`u_frame` are 0 for stills and still export, so
+  anything driven by them must be the identity at 0. To animate seeded noise, prefer overriding the
+  seed via `uniforms()` (`animSeed` in `src/core/motion.ts`) over editing the shader. See [VIDEO.md](VIDEO.md).
 - For every input `foo`: `uniform sampler2D u_foo; uniform vec2 u_foo_size;` (unconnected optional
   inputs are bound to a 1×1 fallback: black for image, white for mask, or `fallback`).
 - `u_prev` / `u_prev_size`: previous pass output (pass 0: the first input).

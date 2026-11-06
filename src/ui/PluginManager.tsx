@@ -1,4 +1,5 @@
 import { useMemo, useState, useSyncExternalStore } from 'react';
+import { AiDownloadToast, AiModelsSection } from '../core/ai/AiModels';
 import { deleteUserNode, getNodeOrigin, listUserNodes } from '../core/customNodes';
 import {
   fetchPluginSource,
@@ -289,6 +290,10 @@ export function PluginManager() {
           <legend>Built-in node packs</legend>
           <BuiltinPacks />
         </fieldset>
+        <fieldset className="groupbox pm-section">
+          <legend>AI Models</legend>
+          <AiModelsSection />
+        </fieldset>
       </Dialog>
       {trust && (
         <Dialog
@@ -354,6 +359,7 @@ export function ExtensionsHost() {
     <>
       <NodeBuilderHost />
       {d === 'plugins' && <PluginManager />}
+      <AiDownloadToast />
     </>
   );
 }

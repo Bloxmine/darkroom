@@ -2,10 +2,12 @@ import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import { memo } from 'react';
 import { getPorts, GROUP, IMAGE } from '../core/graph';
 import { getNodeDef } from '../core/registry';
-import type { GraphNode } from '../core/types';
+import type { GraphNode, PortDef } from '../core/types';
 import { nodeName } from '../store/actions';
 import { engine } from '../store/engine';
+import { useSettings } from '../store/settings';
 import { Icon, nodeColor, nodeIcon } from './Icon';
+import { NodeThumb } from './NodeThumb';
 
 export interface NodeData extends Record<string, unknown> {
   node: GraphNode;
@@ -13,6 +15,8 @@ export interface NodeData extends Record<string, unknown> {
   isOutput: boolean;
   error?: string;
   pending: boolean;
+  /** Ports referenced by edges (for nodes whose type is unknown, so their wires still attach). */
+  edgePorts?: { inputs: string[]; outputs: string[] };
 }
 
 export type DrNode = Node<NodeData, 'dr'>;
@@ -33,12 +37,15 @@ function subtitle(n: GraphNode): string | null {
 
 function NodeViewImpl({ data, selected }: NodeProps<DrNode>) {
   const { node, viewed, error, pending, isOutput } = data;
+  const thumbs = useSettings((s) => s.nodeThumbnails);
   const ports = getPorts(node);
-  const ins = Object.entries(ports.inputs);
-  const outs = Object.entries(ports.outputs);
-  const rows = Math.max(ins.length, outs.length);
   const def = getNodeDef(node.type);
   const unknown = node.type !== GROUP && !def;
+  // unknown type (e.g. plugin disabled): show a "missing" socket for every port an edge uses
+  const missing = (names: string[] = []) => names.map((n): [string, PortDef & { missing?: boolean }] => [n, { type: 'image', missing: true }]);
+  const ins: [string, PortDef & { missing?: boolean }][] = unknown ? missing(data.edgePorts?.inputs) : Object.entries(ports.inputs);
+  const outs: [string, PortDef & { missing?: boolean }][] = unknown ? missing(data.edgePorts?.outputs) : Object.entries(ports.outputs);
+  const rows = Math.max(ins.length, outs.length);
   const sub = subtitle(node);
   const cls = [
     'dn',
@@ -66,6 +73,7 @@ function NodeViewImpl({ data, selected }: NodeProps<DrNode>) {
         )}
       </div>
       {sub && <div className="dn-sub">{sub}</div>}
+      {thumbs && !unknown && <NodeThumb node={node} />}
       <div className="dn-ports">
         {Array.from({ length: rows }, (_, i) => {
           const inp = ins[i];
@@ -78,19 +86,30 @@ function NodeViewImpl({ data, selected }: NodeProps<DrNode>) {
                     type="target"
                     position={Position.Left}
                     id={inHandle(inp[0])}
-                    className={'dh dh-' + inp[1].type + (inp[1].optional ? ' optional' : '')}
+                    className={'dh dh-' + inp[1].type + (inp[1].optional ? ' optional' : '') + (inp[1].missing ? ' missing' : '')}
                   />
-                  <span className="dn-port dn-in" title={`${inp[0]} (${inp[1].type}${inp[1].optional ? ', optional' : ''})`}>
+                  <span
+                    className={'dn-port dn-in' + (inp[1].missing ? ' missing' : '')}
+                    title={inp[1].missing ? `${inp[0]} (missing: the node type is unavailable)` : `${inp[0]} (${inp[1].type}${inp[1].optional ? ', optional' : ''})`}
+                  >
                     {inp[1].label ?? inp[0]}
                   </span>
                 </>
               )}
               {out && (
                 <>
-                  <span className="dn-port dn-out" title={`${out[0]} (${out[1].type})`}>
+                  <span
+                    className={'dn-port dn-out' + (out[1].missing ? ' missing' : '')}
+                    title={out[1].missing ? `${out[0]} (missing: the node type is unavailable)` : `${out[0]} (${out[1].type})`}
+                  >
                     {out[1].label ?? out[0]}
                   </span>
-                  <Handle type="source" position={Position.Right} id={outHandle(out[0])} className={'dh dh-' + out[1].type} />
+                  <Handle
+                    type="source"
+                    position={Position.Right}
+                    id={outHandle(out[0])}
+                    className={'dh dh-' + out[1].type + (out[1].missing ? ' missing' : '')}
+                  />
                 </>
               )}
             </div>

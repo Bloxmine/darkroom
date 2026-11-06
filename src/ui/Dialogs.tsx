@@ -2,10 +2,14 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { listNodeDefs, listPresets } from '../core/registry';
 import { useDoc } from '../store/doc';
 import { EXT, exportImage, measureOutput, newProject, type ExportType } from '../store/io';
-import { setTheme, THEMES, useSettings, type ThemeId } from '../store/settings';
+import { useSettings } from '../store/settings';
+import { exportBaseName } from '../store/exportName';
 import { closeDialog, status, useUi } from '../store/ui';
 import { commands, displayKeys } from './commands';
 import { Icon } from './Icon';
+import { BatchDialog } from './BatchDialog';
+import { ExportVideoDialog } from './ExportVideoDialog';
+import { PrefsWindow } from './prefs/PrefsWindow';
 
 /** A classic modal window: title bar, body, buttons bottom-right. */
 export function Dialog({
@@ -62,11 +66,12 @@ export function Dialog({
 }
 
 function ExportDialog() {
-  const [type, setType] = useState<ExportType>('image/png');
-  const [quality, setQuality] = useState(0.92);
+  const [type, setType] = useState<ExportType>(() => useSettings.getState().exportFormat); // defaults: Preferences › Export
+  const [quality, setQuality] = useState(() => useSettings.getState().exportQuality);
+  const exportScale = useSettings((s) => s.exportScale);
   const [busy, setBusy] = useState(false);
   const [size] = useState(() => measureOutput());
-  const name = useDoc((s) => s.project.name);
+  useDoc((s) => s.project.name); // re-render on rename (file name preview)
   const lossy = type !== 'image/png';
   const go = async () => {
     setBusy(true);
@@ -128,7 +133,7 @@ function ExportDialog() {
               <td>File name</td>
               <td>
                 <code>
-                  {name || 'untitled'}.{EXT[type]}
+                  {exportBaseName()}.{EXT[type]}
                 </code>
               </td>
             </tr>
@@ -143,7 +148,7 @@ function ExportDialog() {
             </tr>
             <tr>
               <td>Resolution</td>
-              <td>Full (scale 1.0), rendered from the Output node</td>
+              <td>{exportScale === 1 ? 'Full (scale 1.0)' : `${exportScale * 100}% (scale ${exportScale})`}, rendered from the Output node</td>
             </tr>
           </tbody>
         </table>
@@ -195,10 +200,11 @@ function AboutDialog() {
 }
 
 const SHORTCUT_GROUPS: { title: string; ids: string[] }[] = [
-  { title: 'File', ids: ['file.new', 'file.open', 'file.save', 'file.import', 'file.export'] },
+  { title: 'File', ids: ['file.new', 'file.open', 'file.save', 'file.import', 'file.export', 'file.batch'] },
   { title: 'Edit', ids: ['edit.undo', 'edit.redo', 'edit.cut', 'edit.copy', 'edit.paste', 'edit.duplicate', 'edit.delete', 'edit.selectAll', 'edit.prefs'] },
   { title: 'Nodes & Groups', ids: ['node.add', 'node.bypass', 'node.view', 'node.viewOutput', 'edit.group', 'edit.ungroup', 'edit.enterGroup', 'edit.exitGroup'] },
   { title: 'View', ids: ['view.fitGraph', 'view.fitImage', 'view.actual', 'view.zoomIn', 'view.zoomOut', 'view.compare', 'view.library', 'view.properties'] },
+  { title: 'Playback', ids: ['playback.toggle', 'playback.prevFrame', 'playback.nextFrame', 'file.exportVideo'] },
 ];
 
 function ShortcutsDialog() {
@@ -320,74 +326,14 @@ function ConfirmNewDialog() {
   );
 }
 
-/** Preferences: theme (applied live; Cancel reverts). */
-function PrefsDialog() {
-  const theme = useSettings((s) => s.theme);
-  const [initial] = useState(theme);
-  const cancel = () => {
-    setTheme(initial);
-    closeDialog();
-  };
-  const info = THEMES.find((t) => t.id === theme);
-  return (
-    <Dialog
-      title="Preferences"
-      icon="setting_tools"
-      onClose={cancel}
-      width={400}
-      buttons={
-        <>
-          <button className="btn default" onClick={closeDialog} autoFocus>
-            OK
-          </button>
-          <button className="btn" onClick={cancel}>
-            Cancel
-          </button>
-        </>
-      }
-    >
-      <fieldset className="groupbox">
-        <legend>Appearance</legend>
-        <div className="pref-row">
-          <label htmlFor="pref-theme">Theme:</label>
-          <select id="pref-theme" className="field select" value={theme} onChange={(e) => setTheme(e.target.value as ThemeId)}>
-            {THEMES.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="pref-row">
-          <span />
-          <span className="muted small">{info?.description}</span>
-        </div>
-        <div className="pref-row">
-          <span />
-          <span className="theme-swatches">
-            {THEMES.map((t) => (
-              <button key={t.id} className={'theme-swatch' + (t.id === theme ? ' active' : '')} data-swatch={t.id} title={t.label} onClick={() => setTheme(t.id)}>
-                <span className="ts-bar" />
-                <span className="ts-body">
-                  <span className="ts-side" />
-                  <span className="ts-view" />
-                </span>
-              </button>
-            ))}
-          </span>
-        </div>
-      </fieldset>
-      <p className="muted small">The theme is also available under View › Theme and is remembered in this browser.</p>
-    </Dialog>
-  );
-}
-
 export function Dialogs() {
   const d = useUi((s) => s.dialog);
   if (d === 'export') return <ExportDialog />;
+  if (d === 'exportVideo') return <ExportVideoDialog />;
   if (d === 'about') return <AboutDialog />;
   if (d === 'shortcuts') return <ShortcutsDialog />;
   if (d === 'confirmNew') return <ConfirmNewDialog />;
-  if (d === 'prefs') return <PrefsDialog />;
+  if (d === 'prefs') return <PrefsWindow />;
+  if (d === 'batch') return <BatchDialog />;
   return null;
 }

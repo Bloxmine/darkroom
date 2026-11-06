@@ -6,6 +6,7 @@ import './ui/themes/aqua.css';
 import * as A from './store/actions';
 import { useDoc } from './store/doc';
 import { importImageFiles } from './store/io';
+import { isImportableImage } from './core/raw/formats';
 import { useUi } from './store/ui';
 import { Splitter, StatusBar } from './ui/Chrome';
 import { graphApi, handleKeyDown } from './ui/commands';
@@ -14,6 +15,7 @@ import { ExtensionsHost } from './ui/PluginManager';
 import { GraphEditor } from './ui/GraphEditor';
 import { Library } from './ui/Library';
 import { MenuBar } from './ui/MenuBar';
+import { nativeMac } from './native/native';
 import { Properties } from './ui/Properties';
 import { Toolbar } from './ui/Toolbar';
 import { Viewer } from './ui/Viewer';
@@ -25,7 +27,7 @@ function useGlobalHandlers() {
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
       if (useUi.getState().dialog) return;
       const at = graphApi.mouseFlowPos() ?? undefined;
-      const files = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith('image/'));
+      const files = [...(e.clipboardData?.files ?? [])].filter((f) => isImportableImage(f.name, f.type));
       e.preventDefault();
       if (files.length) {
         void importImageFiles(files, at);
@@ -75,7 +77,7 @@ export default function App({ ready }: { ready: boolean }) {
 
   return (
     <div className="app">
-      <MenuBar />
+      {!nativeMac && <MenuBar />}
       <Toolbar />
       <div className="workspace">
         {showLib && (

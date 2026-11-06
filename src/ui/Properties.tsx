@@ -17,6 +17,8 @@ import { Icon, nodeIcon } from './Icon';
 import { useContextMenu, type MenuItem } from './Menu';
 import { useRegistry } from './useRegistry';
 import { CustomTypeRow, NodeErrorNote } from './CustomTypeInfo';
+import { RawMetaBlock } from './RawInfo';
+import { RAW } from '../core/raw/formats';
 
 // ---------------------------------------------------------------------------
 // Generic fields
@@ -434,6 +436,7 @@ export function Properties() {
             <ParamRow key={k} node={node} k={k} def={d} inGroup={path.length > 0} openMenu={ctx.open} />
           ))}
           {node.type === IMAGE && !node.params.asset && <div className="pnote">Tip: drop an image file onto the Node Graph to import it.</div>}
+          {node.type === RAW && <RawMetaBlock assetId={String(node.params.asset ?? '')} />}
         </Section>
 
         {isGroup && (

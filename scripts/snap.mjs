@@ -35,9 +35,9 @@ for (let i = 0; i < args.length; i += 2) {
   logs.length = 0;
   await page.goto(`${base}/harness.html?${query}`);
   try {
-    await page.waitForFunction(() => window.__result, null, { timeout: 60000 });
+    await page.waitForFunction(() => window.__result, null, { timeout: Number(process.env.SNAP_TIMEOUT) || 60000 });
   } catch {
-    console.log(JSON.stringify({ file, ok: false, errors: { timeout: 'no result in 60s' }, logs }));
+    console.log(JSON.stringify({ file, ok: false, errors: { timeout: 'no result in time (SNAP_TIMEOUT ms)' }, logs }));
     failed = true;
     continue;
   }

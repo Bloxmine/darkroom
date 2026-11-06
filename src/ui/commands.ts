@@ -1,11 +1,12 @@
 import { GROUP } from '../core/graph';
 import * as A from '../store/actions';
 import { currentGraph, redo, undo, useDoc } from '../store/doc';
-import { importImageDialog, openProjectFile, saveProjectFile, newProject } from '../store/io';
-import { setTheme, THEMES, useSettings } from '../store/settings';
+import { importImageDialog, openProjectFile, saveProjectFile, saveProjectFileAs, newProject } from '../store/io';
+import { setNodeThumbnails, setTheme, THEMES, useSettings } from '../store/settings';
 import { openDialog, status, useUi } from '../store/ui';
 import { zoomViewer } from './viewerApi';
 import { canEditInBuilder, exportNodeType, importNodeFile, openNodeBuilder } from '../store/extensions';
+import * as T from '../store/timeline';
 
 /** Imperative hooks registered by the graph editor (fit view, quick-add at cursor…). */
 export const graphApi = {
@@ -42,12 +43,15 @@ def({
   label: 'New Project',
   icon: 'page_white',
   keys: 'Ctrl+Alt+N',
-  run: () => (useDoc.getState().dirty ? openDialog('confirmNew') : void newProject()),
+  run: () => (useDoc.getState().dirty && useSettings.getState().confirmDiscard ? openDialog('confirmNew') : void newProject()),
 });
 def({ id: 'file.open', label: 'Open Project…', icon: 'folder', keys: 'Ctrl+O', run: () => void openProjectFile() });
 def({ id: 'file.save', label: 'Save Project', icon: 'diskette', keys: 'Ctrl+S', run: saveProjectFile });
+def({ id: 'file.saveAs', label: 'Save Project As…', icon: 'diskette', keys: 'Ctrl+Shift+S', run: saveProjectFileAs });
 def({ id: 'file.import', label: 'Import Image…', icon: 'image_add', keys: 'Ctrl+I', run: () => void importImageDialog() });
 def({ id: 'file.export', label: 'Export Image…', icon: 'picture_save', keys: 'Ctrl+E', run: () => openDialog('export') });
+def({ id: 'file.exportVideo', label: 'Export Video…', icon: 'film_save', keys: 'Ctrl+Shift+E', run: () => openDialog('exportVideo'), enabled: () => !T.useTimeline.getState().exporting });
+def({ id: 'file.batch', label: 'Batch Process…', icon: 'images', keys: 'Ctrl+Shift+B', run: () => openDialog('batch') });
 
 // Edit
 def({ id: 'edit.undo', label: 'Undo', icon: 'arrow_undo', keys: 'Ctrl+Z', run: undo, enabled: () => useDoc.getState().past.length > 0 });
@@ -135,6 +139,13 @@ def({
   run: () => useUi.setState((s) => ({ showProperties: !s.showProperties })),
   checked: () => useUi.getState().showProperties,
 });
+def({
+  id: 'view.thumbnails',
+  label: 'Node Thumbnails',
+  icon: 'pictures',
+  run: () => setNodeThumbnails(!useSettings.getState().nodeThumbnails),
+  checked: () => useSettings.getState().nodeThumbnails,
+});
 
 // View › Theme (radio group)
 for (const t of THEMES)
@@ -145,7 +156,7 @@ for (const t of THEMES)
       setTheme(t.id);
       status(`Theme: ${t.label}`);
     },
-    checked: () => useSettings.getState().theme === t.id,
+    checked: () => useSettings.getState().pref === t.id,
   });
 
 // Node
@@ -170,6 +181,47 @@ def({ id: 'node.editType', label: 'Edit Node Type…', icon: 'script_edit', run:
 def({ id: 'node.importType', label: 'Import Node Type…', icon: 'script_import', run: () => void importNodeFile() });
 def({ id: 'node.exportType', label: 'Export Node Type…', icon: 'script_export', run: () => exportNodeType(selType()), enabled: () => canEditInBuilder(selType()) });
 def({ id: 'edit.plugins', label: 'Plugins…', icon: 'plugin', run: () => openDialog('plugins') });
+
+// Playback (store/timeline.ts). Space is handled in Transport.tsx (only while the project is in motion).
+const motion = () => T.inMotion() && !T.useTimeline.getState().exporting;
+def({
+  id: 'playback.toggle',
+  label: 'Play / Pause',
+  icon: 'control_play_blue',
+  keys: 'Space',
+  run: T.togglePlay,
+  checked: () => T.useTimeline.getState().playing,
+  enabled: () => !T.useTimeline.getState().exporting,
+});
+def({ id: 'playback.prevFrame', label: 'Previous Frame', icon: 'control_rewind_blue', keys: 'ArrowLeft', run: () => T.stepFrame(-1), enabled: motion });
+def({ id: 'playback.nextFrame', label: 'Next Frame', icon: 'control_fastforward_blue', keys: 'ArrowRight', run: () => T.stepFrame(1), enabled: motion });
+def({ id: 'playback.start', label: 'Go to Start', icon: 'control_start_blue', run: T.goToStart, enabled: motion });
+def({
+  id: 'playback.loop',
+  label: 'Loop Playback',
+  icon: 'control_repeat_blue',
+  run: () => T.setTimeline({ loop: !T.useTimeline.getState().loop }),
+  checked: () => T.useTimeline.getState().loop,
+});
+def({
+  id: 'playback.realtime',
+  label: 'Realtime Playback (drop frames)',
+  icon: 'clock_play',
+  run: () => T.setTimeline({ realtime: !T.useTimeline.getState().realtime }),
+  checked: () => T.useTimeline.getState().realtime,
+});
+def({
+  id: 'playback.animate',
+  label: 'Animate (play time on stills: moving grain & noise)',
+  icon: 'film',
+  run: () => {
+    const on = !T.useTimeline.getState().animate;
+    T.setTimeline({ animate: on });
+    if (on) T.play();
+    status(on ? 'Animate on: noise and grain move over time. Space plays/pauses.' : 'Animate off.');
+  },
+  checked: () => T.useTimeline.getState().animate,
+});
 
 // Help
 def({ id: 'help.shortcuts', label: 'Keyboard Shortcuts', icon: 'keyboard', keys: 'F1', run: () => openDialog('shortcuts') });
@@ -199,7 +251,7 @@ function matches(e: KeyboardEvent, combo: string) {
   const want = key.length === 1 ? key.toUpperCase() : key;
   // '=' / '-' style keys: ignore shift (Shift+= is '+')
   if (want === '=' && (k === '=' || k === '+')) return true;
-  if (k !== want && !(e.code === 'Digit' + want)) return false;
+  if (k !== want && !(e.code === 'Digit' + want) && !(e.code === 'Key' + want)) return false; // Key*: ⌥-letters on macOS
   return e.shiftKey === shift;
 }
 
@@ -216,12 +268,17 @@ const isTyping = (t: EventTarget | null) => {
   return false;
 };
 
+/** Set by the desktop app (src/native/bridge.ts): shortcuts its native menu owns, so they don't fire twice. */
+export const keyHooks = { nativeOwns: (_id: string, _combo: string) => false };
+
 export function handleKeyDown(e: KeyboardEvent) {
   if (useUi.getState().dialog || useUi.getState().quickAdd) return;
   if (isTyping(e.target)) return;
   for (const c of Object.values(commands)) {
     if (!c.keys) continue;
-    if (!c.keys.split('|').some((k) => matches(e, k))) continue;
+    const combo = c.keys.split('|').find((k) => matches(e, k));
+    if (!combo) continue;
+    if (keyHooks.nativeOwns(c.id, combo)) return; // the native menu item's accelerator runs it
     // Ctrl+V: let the native paste event handle it (images, text)
     if (c.id === 'edit.paste') return;
     if (c.enabled && !c.enabled()) {
@@ -233,3 +290,19 @@ export function handleKeyDown(e: KeyboardEvent) {
     return;
   }
 }
+
+// ---------------------------------------------------------------------------
+// User shortcut overrides (Preferences › Keyboard). `keys` is rewritten in place so
+// handleKeyDown, the in-app menus and the native menu (src/native/bridge.ts) all agree.
+// ---------------------------------------------------------------------------
+
+/** The built-in shortcut of every command (before overrides). */
+export const defaultKeys: Record<string, string | undefined> = {};
+export function applyKeyOverrides(o: Record<string, string> = useSettings.getState().keyOverrides) {
+  for (const c of Object.values(commands)) {
+    if (!(c.id in defaultKeys)) defaultKeys[c.id] = c.keys;
+    c.keys = c.id in o ? o[c.id] || undefined : defaultKeys[c.id];
+  }
+}
+applyKeyOverrides();
+useSettings.subscribe((s, p) => s.keyOverrides !== p.keyOverrides && applyKeyOverrides(s.keyOverrides));

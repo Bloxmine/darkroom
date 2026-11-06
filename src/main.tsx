@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { setAutoFreeze } from 'immer';
 import './index.css';
 import App from './App.tsx';
+import { PrefsHost } from './ui/prefs/runtime';
 import { loadBuiltins } from './nodes';
 import { initExtensions } from './store/extensions';
 import * as actions from './store/actions';
@@ -11,6 +12,9 @@ import { engine, requestRender } from './store/engine';
 import * as io from './store/io';
 import { loadAutosave, startAutosave } from './store/persist';
 import { setTheme, useSettings } from './store/settings';
+import { initNative } from './native/bridge';
+import * as launch from './store/launch';
+import * as batch from './store/batch';
 import { status, useUi } from './store/ui';
 
 setAutoFreeze(false);
@@ -19,7 +23,9 @@ loadBuiltins();
 /** Restore the autosaved project, or build the starter project. */
 async function boot() {
   await initExtensions().catch((e) => console.warn('[darkroom] extensions failed to load', e)); // custom nodes + plugins, before the project
-  const saved = await loadAutosave();
+  const launch = useSettings.getState().launchAction; // Preferences › General › At launch
+  if (launch === 'empty') return io.newProject();
+  const saved = launch === 'restore' ? await loadAutosave() : null;
   if (saved?.project?.graph?.nodes?.length) {
     try {
       await io.loadProject(io.validateProject(saved.project), { viewed: saved.viewed, dirty: saved.dirty });
@@ -38,7 +44,7 @@ declare global {
     __darkroom?: unknown;
   }
 }
-window.__darkroom = { doc, actions, io, engine, ui: useUi, settings: useSettings, setTheme, requestRender };
+window.__darkroom = { doc, actions, io, engine, ui: useUi, settings: useSettings, setTheme, requestRender, launch, batch };
 
 const booted = boot()
   .catch((e) => {
@@ -46,13 +52,20 @@ const booted = boot()
     status(`Startup failed: ${(e as Error).message}`, 'error');
   })
   .finally(() => startAutosave());
+initNative(booted); // desktop app only (no-op in the browser)
+launch.initLaunch(booted); // PWA share target + file handlers (see docs/RAW_AND_BATCH.md)
 
 function Root() {
   const [ready, setReady] = useState(false);
   useEffect(() => {
     void booted.then(() => setReady(true));
   }, []);
-  return <App ready={ready} />;
+  return (
+    <>
+      <App ready={ready} />
+      <PrefsHost />
+    </>
+  );
 }
 
 createRoot(document.getElementById('root')!).render(

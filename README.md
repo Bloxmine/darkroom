@@ -30,24 +30,49 @@ trip. You can open any preset and take it apart.
 
 - **Node graph editor.** Typed sockets, quick-add (<kbd>Tab</kbd>), drag-and-drop images, copy/paste,
   undo/redo, bypass, groups/subgraphs with exposed parameters, and a breadcrumb into nested groups.
+- **Live node thumbnails.** Every node shows a small preview of its output, including side branches
+  that don't reach the output. Click a thumbnail to view that node. Toggle with *View › Node Thumbnails*.
 - **GPU engine.** WebGL2 with RGBA16F buffers, multi-pass nodes, CPU steps for text/LUTs/histograms,
   and per-node caching, so only what changed re-renders. The preview renders at screen resolution and
   export at full resolution, with scale-aware shaders so both look the same.
-- **About 150 nodes** across Input, Color, Filter, Distort, Transform, Mask, Composite, Math, Stylize,
-  Analog, Print, Process, Artistic, Optical and Retro.
-- **26 presets** emulating cameras, video formats, print processes and 19th-century photography.
+- **About 160 nodes** across Input, Color, Filter, Distort, Transform, Mask, Composite, Math, Stylize,
+  Analog, Print, Process, Artistic, Optical, Retro and AI.
+- **30 presets** emulating cameras, video formats, print processes and 19th-century photography, plus
+  AI-driven looks such as portrait bokeh and real-depth tilt-shift.
 - **Custom nodes.** A **GLSL Shader** node for quick one-offs, and a **Node Builder** that turns
   annotated GLSL (`// @param min=0 max=2`) into a reusable node type with sliders. Custom types are
   embedded in project files, so shared projects keep working.
 - **Plugins.** Safe JSON shader packs, and JavaScript plugins (behind a trust prompt) with access to
   CPU steps and the preset builder. Managed in a Plugin Manager.
-- **Three themes.** *Classic* (a 2000s Windows pro tool), *Aperture* (dark graphite Aqua) and *Aqua*
-  (light Leopard). Choose under View → Theme or in Preferences.
+- **In-browser AI.** A Depth Map (Depth Anything V2) and a Subject Mask (MODNet / U²-Net-p), run
+  locally with ONNX Runtime Web (WebGPU, or WASM on the CPU). They drive a depth-aware tilt-shift,
+  real 3D anaglyphs, depth fog and portrait bokeh. Models download once and then work offline. See
+  [docs/AI.md](docs/AI.md).
+- **Themes that follow your system.** *Auto* (the default) uses *Aperture* (dark graphite Aqua) in
+  Dark Mode and *Aqua* (light Leopard) in Light Mode. *Classic* (a 2000s Windows pro tool) is also available.
+- **Snow Leopard–style Preferences** (<kbd>⌘</kbd>+<kbd>,</kbd>) with eight panes: General, Appearance,
+  Viewer, Performance (GPU info), Export (filename patterns), Plugins & AI (model cache), Keyboard
+  (rebindable shortcuts) and Advanced (import/export settings).
+- **Native Mac app.** A standalone Electron build with a native menu bar, native dialogs, Finder file
+  associations and Open Recent. See [Mac app](#mac-app).
 - **Pro viewer.** Zoom/pan, pixel-exact zoom above 100%, A/B split compare against the source, and
   false-colour/gamut/histogram nodes for checking exposure.
 - **Projects.** `.darkroom` files with embedded images and custom nodes. Autosaves to IndexedDB. Exports
   PNG, JPEG or WebP at full resolution.
-- **Installable PWA.** Works offline once loaded.
+- **Camera RAW.** DNG, CR2, CR3, NEF, ARW, RAF, ORF, RW2, PEF, SRW and more, developed with LibRaw
+  (WebAssembly, in a worker) by a **RAW Photo** node: white balance, exposure, highlight recovery,
+  demosaic and noise reduction, with the full 16-bit data on the GPU. See
+  [docs/RAW_AND_BATCH.md](docs/RAW_AND_BATCH.md).
+- **Batch processing.** *File › Batch Process…* runs the current graph over many photos or a folder
+  and saves a ZIP or writes into a folder, with progress, ETA and per-file errors.
+- **Video.** Drop an MP4/WebM/MOV onto the graph for a **Video** node (frame-accurate WebCodecs
+  decoding, trim/speed/loop), or add a live **Webcam** node. A timeline bar under the viewer plays,
+  scrubs and steps frames (<kbd>Space</kbd>, <kbd>←</kbd>/<kbd>→</kbd>); grain, VHS noise, glitch and
+  gate weave move every frame, even on a still photo (*Playback › Animate*). *File › Export Video…*
+  renders offline to MP4 (H.264) or WebM (VP9) with optional audio passthrough. Still exports are
+  unchanged. See [docs/VIDEO.md](docs/VIDEO.md).
+- **Installable PWA.** Works offline once loaded. Share photos to Darkroom from the OS share sheet,
+  or use it to open `.darkroom`, image and RAW files.
 
 ## Preset gallery
 
@@ -79,8 +104,11 @@ All renders below come straight from the built-in presets at default settings.
 |:-:|:-:|:-:|
 | <img src="docs/media/screenshots/theme-classic.png" width="300"> | <img src="docs/media/screenshots/theme-aperture.png" width="300"> | <img src="docs/media/screenshots/theme-aqua.png" width="300"> |
 
+<p align="center"><img src="docs/media/screenshots/preferences.png" alt="Snow Leopard-style Preferences window, Appearance pane" width="80%"></p>
+
 Switch themes under **View → Theme** or in **Edit → Preferences…** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>,</kbd>).
-The choice is remembered.
+The default, **Auto (match system)**, uses Aperture when the system is in Dark Mode and Aqua in Light
+Mode, and switches live when the system appearance changes. The choice is remembered.
 
 ## Getting started
 
@@ -122,11 +150,40 @@ own photo onto the node graph, swap the preset from the **Node Library**, and ex
 
 On macOS, <kbd>⌘</kbd> works wherever <kbd>Ctrl</kbd> is listed. Help → Keyboard Shortcuts has the full list.
 
+## Mac app
+
+| Dark Mode | Light Mode |
+|:-:|:-:|
+| <img src="docs/media/screenshots/mac-app-dark.png" width="420"> | <img src="docs/media/screenshots/mac-app-light.png" width="420"> |
+
+Darkroom also ships as a standalone macOS app (Electron): native menu bar, native open/save dialogs,
+real files on disk (Save overwrites in place, Save As…, Open Recent), the window title shows the
+document with the unsaved-changes dot, and `.darkroom` projects and images (JPEG/PNG/WebP/HEIC/TIFF and
+camera RAW) open from Finder or by dropping them on the Dock icon. It follows the system light/dark
+appearance like the web version, and works fully offline.
+
+**Install:** open `Darkroom-<version>-arm64.dmg` and drag Darkroom to Applications. The app is not
+signed or notarized, so the first time macOS Gatekeeper will refuse to open it. **Right-click (or
+Control-click) Darkroom in Applications → Open → Open.** After that it opens normally. (On recent
+macOS versions you may instead need *System Settings → Privacy & Security → Open Anyway*. Or remove
+the quarantine flag with `xattr -dr com.apple.quarantine /Applications/Darkroom.app`.)
+
+**Build it yourself** (on a Mac; builds for the host architecture):
+
+```bash
+pnpm install
+pnpm electron:build   # → release/Darkroom-<version>-<arch>.dmg and release/mac-<arch>/Darkroom.app
+pnpm electron:dev     # Vite dev server + Electron with live reload (main/preload rebuild + restart)
+pnpm electron:icon    # regenerate build/icon.icns from docs/media/logo.svg
+```
+
+Architecture, IPC surface and security choices: [docs/DESKTOP.md](docs/DESKTOP.md).
+
 ## Nodes
 
 | Category | Highlights |
 |---|---|
-| **Input** | Image, Solid Color, Gradient, Noise (value/Perlin/fBm), Text, Checker |
+| **Input** | Image, RAW Photo, Solid Color, Gradient, Noise (value/Perlin/fBm), Text, Checker |
 | **Color** | Levels, Curves, HSL, White Balance, Exposure, Color Balance, Channel Mixer, Gradient Map, 3D LUT (`.cube`), Auto Levels, Histogram Equalize, Clarity, Dehaze, Highlights/Shadows, Selective Color, Split Toning, Black & White mixer, Match Color, False Color, Gamut Warning |
 | **Filter** | Gaussian/Box/Directional/Lens Blur, Sharpen, High Pass, Denoise, Surface Blur, Bilateral, Median, Min/Max, Glow, Edge Detect, Frequency Separation |
 | **Transform & Distort** | Crop, Resize (Lanczos/bicubic/area), Rotate 90, Flip, Canvas Size, Straighten, Perspective, Tile, Lens Distortion, Chromatic Aberration, Displace, Pixelate, Downsample, Wave, Mirror, Polar |
@@ -140,6 +197,7 @@ On macOS, <kbd>⌘</kbd> works wherever <kbd>Ctrl</kbd> is listed. Help → Keyb
 | **Optical** | Tilt-Shift, Zoom Blur, Radial Blur, Lens Flare, God Rays, Anaglyph 3D, Kaleidoscope |
 | **Retro** | Palette Quantize (NES, PICO-8, C64, EGA, CGA, Mac Plus, Apple II, ZX Spectrum…), Error Diffusion (Atkinson, Floyd–Steinberg, JJN, Sierra), LCD subpixels |
 | **Utility** | Output, Reroute, Info, Split Compare, Channel View, Histogram Overlay, GLSL Shader |
+| **AI** | Depth Map, Subject Mask, Depth Fog (models run in the browser, see [docs/AI.md](docs/AI.md)) |
 
 ## Custom nodes & plugins
 
@@ -225,6 +283,13 @@ node scripts/snap.mjs out.png 'node=effects.kuwahara&params={"radius":8}'
   [Roberto Nickson](https://unsplash.com/photos/7BjmDICVloE) (canoe),
   [Alexander Shustov](https://unsplash.com/photos/AHBiSKaENwc) (portrait),
   [Alexey Topolyanskiy](https://unsplash.com/photos/-oWyJoSqBRM) (fjord).
+- AI models (downloaded on first use, all Apache-2.0):
+  [Depth Anything V2 Small](https://huggingface.co/onnx-community/depth-anything-v2-small) (Yang et al.),
+  [MODNet](https://huggingface.co/Xenova/modnet) (Ke et al.) and
+  [U²-Net-p](https://huggingface.co/BritishWerewolf/U-2-Netp) (Qin et al., via rembg). They run with
+  [ONNX Runtime Web](https://onnxruntime.ai) (MIT). Details in [docs/AI.md](docs/AI.md).
+- RAW decoding: [LibRaw](https://www.libraw.org) (LGPL-2.1 / CDDL) via
+  [libraw-wasm](https://github.com/ybouane/LibRaw-Wasm) (ISC). ZIP writing: [fflate](https://github.com/101arrowz/fflate) (MIT).
 - Built with [React](https://react.dev), [React Flow](https://reactflow.dev),
   [Zustand](https://zustand.docs.pmnd.rs), [CodeMirror](https://codemirror.net),
   [Vite](https://vite.dev) and [vite-plugin-pwa](https://vite-pwa-org.netlify.app).

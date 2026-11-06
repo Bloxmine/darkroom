@@ -44,7 +44,8 @@ function super8(): PresetDef {
   const hal = b.node('stylize.halation', { threshold: 0.7, amount: 0.8, radius: 8 }, { image: film });
   const gate = b.node('stylize.vignette', { amount: 0.6, radius: 0.55, softness: 0.7, roundness: 0.3 }, { image: hal });
   const weave = b.node('distort.transform', { offset: [0.004, -0.006], scale: 1.03, rotate: 0.3, wrap: 'clamp' }, { image: gate });
-  const grain = b.node('stylize.grain', { amount: 0.8, size: 2.2, roughness: 0.7, chroma: 0.35 }, { image: weave });
+  const gw = b.node('analog.gateWeave', { amount: 4, jitter: 0.6, rotation: 0.2, flicker: 0.08 }, { image: weave }); // motion only
+  const grain = b.node('stylize.grain', { amount: 0.8, size: 2.2, roughness: 0.7, chroma: 0.35 }, { image: gw });
   const leak = b.node('stylize.lightLeak', { edge: 'top', position: 0.7, size: 0.5, intensity: 0.35, seed: 8 }, { image: grain });
   const view = b.node('analog.resample', { mode: 'reference', filter: 'smooth' }, { image: leak, reference: img });
   b.output('out', view);

@@ -1,0 +1,129 @@
+/* Batch Process dialog — only theme variables, so Classic / Aperture / Aqua all work. */
+.batch-drop {
+  border: 1px dashed var(--line);
+  background: var(--field);
+  color: var(--text);
+  padding: 6px;
+  min-height: 92px;
+  max-height: 150px;
+  overflow: auto;
+}
+.batch-drop.over {
+  border-color: var(--sel);
+  background: var(--hover);
+}
+.batch-drop .empty {
+  color: var(--muted);
+  text-align: center;
+  padding: 26px 0;
+}
+.batch-files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.batch-files li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 2px;
+  white-space: nowrap;
+}
+.batch-files li .bname {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.batch-files li .bstat {
+  color: var(--muted);
+  font-size: 10px;
+}
+.batch-files li.error .bstat {
+  color: var(--error);
+}
+.batch-files li .bx {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 2px;
+}
+.batch-row {
+  display: grid;
+  grid-template-columns: 86px 1fr;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0;
+}
+.batch-row .field.text,
+.batch-row .field.select {
+  width: 100%;
+}
+.batch-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.batch-tools {
+  display: flex;
+  gap: 4px;
+  margin-top: 5px;
+  flex-wrap: wrap;
+}
+.batch-progress {
+  height: 14px;
+  background: var(--field);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.batch-progress > div {
+  height: 100%;
+  background: var(--sel);
+  transition: width 0.2s;
+}
+.batch-meta {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  margin: 3px 0;
+}
+.batch-strip {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 4px 0 2px;
+  min-height: 84px;
+}
+.batch-thumb {
+  flex: 0 0 auto;
+  height: 72px;
+  min-width: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  background: var(--face-2);
+  color: var(--muted);
+  font-size: 9px;
+  position: relative;
+  overflow: hidden;
+}
+.batch-thumb img {
+  height: 100%;
+  display: block;
+}
+.batch-thumb.running {
+  border-color: var(--sel);
+}
+.batch-thumb.error {
+  border-color: var(--error);
+  color: var(--error);
+}
+.batch-errors {
+  margin: 4px 0 0;
+  padding: 0 0 0 14px;
+  color: var(--error);
+  max-height: 70px;
+  overflow: auto;
+}

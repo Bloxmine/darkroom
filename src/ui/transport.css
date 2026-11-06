@@ -1,0 +1,60 @@
+/* Timeline / transport bar under the viewer (see Transport.tsx). Inherits the
+   themed .viewer-toolbar look; only layout here, colours come from theme tokens. */
+.viewer-toolbar.transport-bar {
+  border-bottom: none;
+  border-top: 1px solid var(--lo);
+  gap: 2px;
+}
+.transport-scrub {
+  min-width: 80px;
+  margin: 0 6px;
+}
+.transport-time {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  min-width: 112px;
+  text-align: right;
+}
+.transport-frame {
+  font-family: var(--mono);
+  min-width: 34px;
+  margin-left: 4px;
+}
+.transport-bar .tb-label {
+  margin-right: 4px;
+}
+.transport-mode {
+  width: 88px;
+  margin: 0 4px;
+}
+.transport-fps {
+  font-family: var(--mono);
+  min-width: 44px;
+}
+
+/* Export Video dialog */
+.vx-progress {
+  position: relative;
+  height: 16px;
+  margin: 6px 0 2px;
+  overflow: hidden;
+}
+.vx-progress > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--sel);
+}
+.vx-error {
+  color: var(--error);
+  margin: 4px 0;
+  white-space: pre-wrap;
+}
+.vx-grid {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 4px 8px;
+  align-items: center;
+}
+.vx-grid .field.select {
+  width: 100%;
+}

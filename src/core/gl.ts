@@ -40,6 +40,10 @@ export class GL {
   private pool: Tex[] = [];
   private fallbacks = new Map<string, Tex>();
   maxSize: number;
+  /** Max idle render targets kept for reuse (Preferences › Performance). */
+  poolLimit = 24;
+  /** Approximate bytes held by textures created here (Preferences › Performance readout). */
+  bytes = 0;
 
   constructor(public canvas: HTMLCanvasElement | OffscreenCanvas) {
     const gl = canvas.getContext('webgl2', {
@@ -121,6 +125,7 @@ export class GL {
     gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    this.bytes += width * height * (float ? 8 : 4);
     return { tex, fb, width, height, float, filter };
   }
 
@@ -156,10 +161,11 @@ export class GL {
     t.pooled = true;
     this.pool.push(t);
     // keep pool bounded
-    while (this.pool.length > 24) this.destroy(this.pool.shift()!);
+    while (this.pool.length > this.poolLimit) this.destroy(this.pool.shift()!);
   }
 
   destroy(t: Tex) {
+    this.bytes -= texBytes(t);
     this.gl.deleteTexture(t.tex);
     if (t.fb) this.gl.deleteFramebuffer(t.fb);
   }
@@ -193,7 +199,43 @@ export class GL {
       mips = true;
     }
     this.setFilter(filter, mips);
+    this.bytes += texBytes({ width, height, float });
     return { tex, fb: null, width, height, float, filter };
+  }
+
+  /**
+   * Upload a video frame (VideoFrame, <video>, canvas, bitmap…) for time-varying sources.
+   * Reuses `prev` when the size matches (texSubImage2D), no mipmaps. Raw data falls back to upload().
+   * A closed/not-ready frame keeps `prev` unchanged.
+   */
+  uploadFrame(src: TexSource, prev?: Tex): Tex {
+    if (isRaw(src) || src instanceof ImageData) return this.upload(src, prev);
+    const gl = this.gl;
+    const width = sourceWidth(src);
+    const height = sourceHeight(src);
+    if (!width || !height) return prev ?? this.fallback('black');
+    try {
+      if (prev && !prev.fb && prev.width === width && prev.height === height && !prev.float) {
+        gl.bindTexture(gl.TEXTURE_2D, prev.tex);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, src as TexImageSource);
+        return prev;
+      }
+      const tex = gl.createTexture()!;
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+      gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, width, height);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, src as TexImageSource);
+      this.setFilter('linear', false);
+      if (prev) this.destroy(prev);
+      this.bytes += width * height * 4;
+      return { tex, fb: null, width, height, float: false, filter: 'linear' };
+    } catch (e) {
+      console.warn('[darkroom] frame upload failed', e);
+      return prev ?? this.fallback('black');
+    }
   }
 
   /** 1x1 constant texture for unconnected optional inputs. */
@@ -277,6 +319,17 @@ export class GL {
   }
 }
 
+function sourceWidth(s: TexSource): number {
+  if (typeof HTMLVideoElement !== 'undefined' && s instanceof HTMLVideoElement) return s.videoWidth;
+  if (typeof VideoFrame !== 'undefined' && s instanceof VideoFrame) return s.displayWidth;
+  return (s as { width: number }).width;
+}
+function sourceHeight(s: TexSource): number {
+  if (typeof HTMLVideoElement !== 'undefined' && s instanceof HTMLVideoElement) return s.videoHeight;
+  if (typeof VideoFrame !== 'undefined' && s instanceof VideoFrame) return s.displayHeight;
+  return (s as { height: number }).height;
+}
+
 function isRaw(s: TexSource): s is RawTex {
   return typeof (s as RawTex).data !== 'undefined' && !(s instanceof ImageData);
 }
@@ -295,3 +348,6 @@ function setUniform(gl: WebGL2RenderingContext, type: number, loc: WebGLUniformL
     case gl.FLOAT_MAT4: gl.uniformMatrix4fv(loc, false, arr); break;
   }
 }
+
+/** Approximate GPU bytes of a texture (RGBA8 or RGBA16F, single level). */
+const texBytes = (t: { width: number; height: number; float: boolean }) => t.width * t.height * (t.float ? 8 : 4);

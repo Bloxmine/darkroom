@@ -1,0 +1,961 @@
+/* ==========================================================================
+   Preferences window — Mac OS X 10.6 Snow Leopard System Preferences look.
+   Deliberately theme-independent: it is a light Aqua window in Classic,
+   Aperture and Aqua alike (as Aperture's own Preferences window was).
+   Everything is scoped under .slp; no theme tokens are used.
+   ========================================================================== */
+
+.slp-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 800;
+  background: transparent; /* modeless-looking: no dimming */
+}
+
+.slp {
+  --slp-font: 'Lucida Grande', 'Lucida Sans Unicode', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --slp-blue: linear-gradient(#cfe5fd, #8cc0f6 45%, #4c99ec 51%, #78b6f4 85%, #a9d4fa);
+  --slp-blue-border: #3a63a3;
+  position: absolute;
+  left: 50%;
+  width: 620px;
+  margin-left: -310px;
+  font: 13px/1.35 var(--slp-font);
+  color: #000;
+  -webkit-font-smoothing: antialiased;
+  border-radius: 5px 5px 4px 4px;
+  background: #ececec;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.38),
+    0 22px 56px rgba(0, 0, 0, 0.55),
+    0 6px 16px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  color-scheme: light;
+  text-align: left;
+}
+.slp *,
+.slp *::before,
+.slp *::after {
+  box-sizing: border-box;
+}
+
+/* --- unified title bar + toolbar ------------------------------------------ */
+.slp-head {
+  position: relative;
+  background: linear-gradient(#e8e8e8, #d3d3d3 55%, #bcbcbc);
+  border-bottom: 1px solid #8e8e8e;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  cursor: default;
+  padding-top: 22px;
+}
+.slp-title {
+  position: absolute;
+  top: 0;
+  left: 70px;
+  right: 70px;
+  height: 22px;
+  line-height: 22px;
+  text-align: center;
+  font: 13px/22px var(--slp-font);
+  color: #4d4d4d;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.slp-lights {
+  position: absolute;
+  top: 4px;
+  left: 8px;
+  display: flex;
+  gap: 8px;
+}
+.slp-light {
+  position: relative;
+  width: 13px;
+  height: 13px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.5);
+  box-shadow:
+    0 1px 1px rgba(255, 255, 255, 0.6),
+    inset 0 1px 2px rgba(0, 0, 0, 0.35);
+  cursor: default;
+  font: bold 9px/11px var(--slp-font);
+  color: transparent;
+  text-align: center;
+  outline: none;
+}
+.slp-light::before {
+  /* the glossy specular highlight */
+  content: '';
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 1px;
+  height: 5px;
+  border-radius: 50% / 60% 60% 40% 40%;
+  background: linear-gradient(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.15));
+}
+.slp-light.close {
+  background:
+    radial-gradient(circle at 50% 95%, rgba(255, 200, 180, 0.95) 0, rgba(255, 140, 110, 0) 55%),
+    radial-gradient(circle at 50% 40%, #f25a43 0, #d0331c 55%, #8f1708 100%);
+  border-color: #8a1e0f;
+}
+.slp-light.min {
+  background:
+    radial-gradient(circle at 50% 95%, rgba(255, 245, 170, 0.95) 0, rgba(255, 230, 120, 0) 55%),
+    radial-gradient(circle at 50% 40%, #f7c33c 0, #d99a11 55%, #976505 100%);
+  border-color: #946a10;
+}
+.slp-light.zoom {
+  background:
+    radial-gradient(circle at 50% 95%, rgba(210, 255, 170, 0.95) 0, rgba(160, 230, 110, 0) 55%),
+    radial-gradient(circle at 50% 40%, #74c844 0, #4a9b1f 55%, #2b6a0b 100%);
+  border-color: #3a6f18;
+}
+.slp-light:disabled {
+  filter: saturate(0.25) brightness(1.18);
+  opacity: 0.55;
+}
+.slp-lights:hover .slp-light.close {
+  color: rgba(70, 0, 0, 0.8);
+}
+.slp-light.close:active {
+  filter: brightness(0.8);
+}
+
+.slp-toolbar {
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+  padding: 1px 8px 5px;
+}
+.slp-tool {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 66px;
+  padding: 3px 4px 2px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  font: 11px/14px var(--slp-font);
+  color: #1c1c1c;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+  cursor: default;
+  outline: none;
+  white-space: nowrap;
+}
+.slp-tool img {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 1px;
+  image-rendering: auto;
+  pointer-events: none;
+}
+.slp-tool:active img {
+  filter: brightness(0.7);
+}
+.slp-tool.selected {
+  background: linear-gradient(#c8c8c8, #b3b3b3);
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.45),
+    inset 0 0 1px rgba(0, 0, 0, 0.35),
+    0 1px 0 rgba(255, 255, 255, 0.55);
+}
+.slp-tool:focus-visible {
+  box-shadow: 0 0 0 3px rgba(84, 145, 228, 0.7);
+}
+
+/* --- content pane ------------------------------------------------------------ */
+.slp-body {
+  position: relative;
+  overflow: hidden;
+  background: #ececec;
+  transition: height 0.24s cubic-bezier(0.3, 0.1, 0.25, 1);
+}
+.slp-body::before {
+  /* subtle shadow cast by the toolbar */
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 5px;
+  background: linear-gradient(rgba(0, 0, 0, 0.13), rgba(0, 0, 0, 0));
+  pointer-events: none;
+  z-index: 2;
+}
+.slp-pane {
+  padding: 18px 22px 14px;
+  transition: opacity 0.12s;
+}
+.slp-pane.switching {
+  opacity: 0;
+  transition: none;
+}
+.slp-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+.slp-foot .grow {
+  flex: 1;
+}
+
+/* --- form layout: right-aligned labels with colons --------------------------- */
+.slp-form {
+  display: grid;
+  grid-template-columns: 196px 1fr;
+  column-gap: 10px;
+  row-gap: 9px;
+  align-items: center;
+}
+.slp-form > .lbl {
+  text-align: right;
+  white-space: nowrap;
+}
+.slp-form > .lbl.top {
+  align-self: start;
+  padding-top: 3px;
+}
+.slp-form > .ctl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.slp-form > .ctl.col {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+.slp-form > .sep {
+  grid-column: 1 / -1;
+  height: 1px;
+  margin: 3px 0;
+  background: #c9c9c9;
+  box-shadow: 0 1px 0 #f8f8f8;
+}
+.slp-note {
+  font-size: 11px;
+  color: #5b5b5b;
+  line-height: 1.35;
+}
+.slp-small {
+  font-size: 11px;
+}
+.slp-strong {
+  font-weight: bold;
+}
+
+/* --- NSBox ------------------------------------------------------------------ */
+.slp-box-title {
+  font-size: 11px;
+  color: #262626;
+  margin: 0 0 3px 3px;
+}
+.slp-box {
+  background: rgba(0, 0, 0, 0.055);
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-top-color: rgba(0, 0, 0, 0.24);
+  border-radius: 5px;
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.07),
+    0 1px 0 rgba(255, 255, 255, 0.7);
+  padding: 12px 14px;
+}
+.slp-box + .slp-box-title,
+.slp-box + .slp-box {
+  margin-top: 12px;
+}
+
+/* --- push buttons ------------------------------------------------------------ */
+.slp-btn {
+  position: relative;
+  height: 21px;
+  min-width: 74px;
+  padding: 0 14px;
+  border: 1px solid #8a8a8a;
+  border-top-color: #9c9c9c;
+  border-bottom-color: #6f6f6f;
+  border-radius: 11px;
+  background: linear-gradient(#ffffff, #f5f5f5 45%, #e6e6e6 51%, #f1f1f1 85%, #fbfbfb);
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  font: 13px/19px var(--slp-font);
+  color: #000;
+  white-space: nowrap;
+  cursor: default;
+  outline: none;
+}
+.slp-btn:active:not(:disabled) {
+  background: linear-gradient(#9fc3ef, #6ea2e6 45%, #3f84de 51%, #66a0e8 85%, #9cc7f5);
+  border-color: #3a63a3;
+}
+.slp-btn:disabled {
+  color: #9a9a9a;
+  border-color: #b5b5b5;
+  box-shadow: none;
+}
+.slp-btn.default {
+  background: var(--slp-blue);
+  border-color: var(--slp-blue-border);
+  border-bottom-color: #2c4f88;
+  animation: slp-pulse 1.4s ease-in-out infinite alternate;
+}
+@keyframes slp-pulse {
+  from {
+    filter: brightness(1);
+  }
+  to {
+    filter: brightness(1.12) saturate(0.85);
+  }
+}
+.slp-btn.small {
+  height: 17px;
+  min-width: 0;
+  padding: 0 9px;
+  font-size: 11px;
+  line-height: 15px;
+  border-radius: 9px;
+}
+.slp-btn:focus-visible,
+.slp-popup select:focus-visible,
+.slp-field:focus,
+.slp-check:focus-visible .box,
+.slp-search:focus-within {
+  box-shadow: 0 0 0 3px rgba(84, 145, 228, 0.65);
+}
+
+/* round help button */
+.slp-help {
+  width: 21px;
+  height: 21px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid #8a8a8a;
+  border-bottom-color: #6c6c6c;
+  background: linear-gradient(#ffffff, #f2f2f2 48%, #e1e1e1 52%, #f4f4f4);
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 #fff;
+  font: bold 13px/19px var(--slp-font);
+  color: #3d3d3d;
+  text-align: center;
+  cursor: default;
+  outline: none;
+}
+.slp-help:active {
+  background: linear-gradient(#c9c9c9, #dadada);
+}
+
+/* --- pop-up button --------------------------------------------------------- */
+.slp-popup {
+  position: relative;
+  display: inline-block;
+  height: 20px;
+  min-width: 120px;
+  border: 1px solid #8a8a8a;
+  border-bottom-color: #6f6f6f;
+  border-radius: 5px;
+  background: linear-gradient(#ffffff, #f5f5f5 45%, #e6e6e6 51%, #f1f1f1 85%, #fbfbfb);
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  vertical-align: middle;
+}
+.slp-popup::after {
+  /* the blue double-arrow capsule */
+  content: '';
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  bottom: -1px;
+  width: 19px;
+  border: 1px solid var(--slp-blue-border);
+  border-radius: 0 5px 5px 0;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='11'%3E%3Cpath d='M3.5 0L7 4.2H0zM3.5 11L0 6.8h7z' fill='%23fff'/%3E%3C/svg%3E")
+      center / 7px 11px no-repeat,
+    var(--slp-blue);
+  pointer-events: none;
+}
+.slp-popup select {
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
+  width: 100%;
+  height: 18px;
+  margin: 0;
+  padding: 0 26px 0 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  font: 13px/18px var(--slp-font);
+  color: #000;
+  outline: none;
+  cursor: default;
+}
+.slp-popup.disabled {
+  opacity: 0.55;
+}
+
+/* --- text fields + stepper ------------------------------------------------- */
+.slp-field {
+  height: 22px;
+  padding: 2px 4px;
+  border: 1px solid #9a9a9a;
+  border-top-color: #7f7f7f;
+  background: #fff;
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.2);
+  font: 13px/16px var(--slp-font);
+  color: #000;
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.slp-field.num {
+  width: 64px;
+  text-align: right;
+}
+.slp-stepper {
+  display: inline-flex;
+  flex-direction: column;
+  width: 13px;
+  height: 22px;
+  margin-left: 2px;
+  border: 1px solid #8a8a8a;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.14);
+}
+.slp-stepper button {
+  flex: 1;
+  padding: 0;
+  border: 0;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='4'%3E%3Cpath d='M3.5 0L7 4H0z' fill='%23222'/%3E%3C/svg%3E") center
+      no-repeat,
+    linear-gradient(#ffffff, #e4e4e4);
+  cursor: default;
+}
+.slp-stepper button + button {
+  border-top: 1px solid #a0a0a0;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='4'%3E%3Cpath d='M0 0h7L3.5 4z' fill='%23222'/%3E%3C/svg%3E") center
+      no-repeat,
+    linear-gradient(#f4f4f4, #dddddd);
+}
+.slp-stepper button:active {
+  background-color: #9fc3ef;
+  filter: brightness(0.85);
+}
+
+/* search field (rounded, with magnifier) */
+.slp-search {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  width: 200px;
+  border: 1px solid #8f8f8f;
+  border-radius: 11px;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Ccircle cx='5' cy='5' r='3.6' fill='none' stroke='%23555' stroke-width='1.5'/%3E%3Cpath d='M7.6 7.6l3.4 3.4' stroke='%23555' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E")
+      7px 50% no-repeat,
+    #fff;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.28);
+}
+.slp-search input {
+  flex: 1;
+  min-width: 0;
+  height: 18px;
+  margin: 0 8px 0 23px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: 12px var(--slp-font);
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* --- checkbox + radio ------------------------------------------------------ */
+.slp-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: default;
+  outline: none;
+}
+.slp-check .box {
+  position: relative;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 1px solid #7f7f7f;
+  border-bottom-color: #666;
+  border-radius: 3px;
+  background: linear-gradient(#ffffff, #f2f2f2 45%, #dedede 55%, #f6f6f6);
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 #fff;
+}
+.slp-check.radio .box {
+  border-radius: 50%;
+}
+.slp-check[aria-checked='true'] .box {
+  background: var(--slp-blue);
+  border-color: var(--slp-blue-border);
+}
+.slp-check[aria-checked='true']:not(.radio) .box::after {
+  content: '';
+  position: absolute;
+  left: 1px;
+  top: -3px;
+  width: 13px;
+  height: 13px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13'%3E%3Cpath d='M2.5 6.8l3 3.4L11.6 1.4' fill='none' stroke='%23141c2c' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    no-repeat;
+}
+.slp-check.radio[aria-checked='true'] .box::after {
+  content: '';
+  position: absolute;
+  left: 3.5px;
+  top: 3.5px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #14243c;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+.slp-check:active .box {
+  filter: brightness(0.82);
+}
+.slp-check:disabled {
+  color: #8d8d8d;
+}
+.slp-check:disabled .box {
+  opacity: 0.5;
+}
+.slp-radios {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+/* --- slider with ticks ----------------------------------------------------- */
+.slp-slider {
+  display: inline-flex;
+  flex-direction: column;
+  width: 260px;
+}
+.slp-slider input {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 18px;
+  margin: 0;
+  background: transparent;
+  outline: none;
+}
+.slp-slider input::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 3px;
+  border: 1px solid #8b8b8b;
+  background: linear-gradient(#a9a9a9, #cfcfcf 60%, #e1e1e1);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.3);
+}
+.slp-slider input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 15px;
+  height: 17px;
+  margin-top: -7px;
+  border: 1px solid #6c6c6c;
+  /* Aqua tick-slider knob: pointed at the bottom */
+  border-radius: 50% 50% 50% 50% / 38% 38% 62% 62%;
+  clip-path: polygon(0 0, 100% 0, 100% 62%, 50% 100%, 0 62%);
+  background: linear-gradient(#ffffff, #f0f0f0 45%, #d7d7d7 55%, #ececec);
+  box-shadow: inset 0 1px 0 #fff;
+}
+.slp-slider input:active::-webkit-slider-thumb {
+  background: var(--slp-blue);
+  border-color: var(--slp-blue-border);
+}
+.slp-ticks {
+  position: relative;
+  height: 5px;
+  margin: 0 7px;
+}
+.slp-ticks i {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 5px;
+  background: #6d6d6d;
+  box-shadow: 1px 0 0 rgba(255, 255, 255, 0.7);
+}
+.slp-tick-labels {
+  position: relative;
+  height: 14px;
+  margin: 1px 7px 0;
+  font-size: 10px;
+  color: #3f3f3f;
+}
+.slp-tick-labels span {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.slp-tick-labels span:first-child {
+  transform: none;
+  left: -7px !important;
+}
+.slp-tick-labels span:last-child {
+  transform: none;
+  left: auto !important;
+  right: -7px;
+}
+
+/* --- tables ------------------------------------------------------------------ */
+.slp-table-wrap {
+  border: 1px solid #8f8f8f;
+  background: #fff;
+  overflow: auto;
+}
+.slp-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font: 12px/1.3 var(--slp-font);
+}
+.slp-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 17px;
+  padding: 0 6px;
+  border-bottom: 1px solid #a6a6a6;
+  border-right: 1px solid #c9c9c9;
+  background: linear-gradient(#ffffff, #f2f2f2 50%, #e8e8e8 51%, #efefef);
+  font-weight: normal;
+  font-size: 11px;
+  text-align: left;
+  color: #000;
+}
+.slp-table th:last-child {
+  border-right: 0;
+}
+.slp-table td {
+  height: 19px;
+  padding: 1px 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.slp-table tbody tr:nth-child(even) td {
+  background: #edf3fe;
+}
+.slp-table tbody tr.sel td {
+  background: linear-gradient(#6f9fe4, #3d74d3);
+  color: #fff;
+  border-top: 1px solid #5a8bd8;
+}
+.slp-table tbody tr.conflict td {
+  color: #b3170b;
+}
+.slp-table tbody tr.sel.conflict td {
+  color: #ffe1dc;
+}
+.slp-table td.right {
+  text-align: right;
+}
+.slp-table td.mono,
+.slp-key {
+  font-family: 'Lucida Grande', 'Helvetica Neue', sans-serif;
+}
+.slp-table img {
+  width: 16px;
+  height: 16px;
+  vertical-align: -3px;
+  margin-right: 5px;
+}
+.slp-table .empty td {
+  height: 64px;
+  text-align: center;
+  color: #888;
+  background: #fff !important;
+}
+.slp-recording {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: #fff;
+  color: #1d4fb1;
+  box-shadow: inset 0 0 0 1px #6f9fe4;
+  font-size: 11px;
+}
+.slp-table .modified {
+  font-weight: bold;
+}
+.slp-table .rowbtn {
+  border: 0;
+  padding: 0 3px;
+  background: none;
+  color: inherit;
+  font: 13px var(--slp-font);
+  opacity: 0.7;
+  cursor: default;
+}
+
+/* --- appearance: big theme tiles --------------------------------------------- */
+.slp-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.slp-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 11px var(--slp-font);
+  color: #000;
+  cursor: default;
+  outline: none;
+}
+.slp-tile .shot {
+  position: relative;
+  width: 118px;
+  height: 78px;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.45);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+}
+.slp-tile.selected .shot {
+  box-shadow:
+    0 0 0 3px #fff,
+    0 0 0 6px #3d80df,
+    0 2px 6px rgba(0, 0, 0, 0.4);
+}
+.slp-tile .bar {
+  height: 14px;
+  flex: none;
+}
+.slp-tile .row {
+  flex: 1;
+  display: flex;
+}
+.slp-tile .side {
+  width: 26%;
+}
+.slp-tile .view {
+  flex: 1;
+  margin: 5px;
+  border-radius: 1px;
+  background: linear-gradient(135deg, #3a6c9a, #c5a265 60%, #4b4e2d);
+}
+.slp-tile .graph {
+  height: 22px;
+  flex: none;
+}
+.slp-tile .half {
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  display: flex;
+  flex-direction: column;
+}
+.slp-tile[data-t='classic'] .shot {
+  background: #d4d0c8;
+}
+.slp-tile[data-t='classic'] .bar {
+  background: linear-gradient(90deg, #0a246a, #3a6ea5);
+}
+.slp-tile[data-t='classic'] .side {
+  background: #ece9e3;
+  border-right: 1px solid #808080;
+}
+.slp-tile[data-t='classic'] .graph {
+  background: #8a8a8a;
+}
+.slp-tile[data-t='aperture'] .shot,
+.slp-tile[data-t='auto'] .half {
+  background: #2a2a2a;
+}
+.slp-tile[data-t='aperture'] .bar,
+.slp-tile[data-t='auto'] .half .bar {
+  background: linear-gradient(#5a5a5a, #3a3a3a);
+}
+.slp-tile[data-t='aperture'] .side,
+.slp-tile[data-t='auto'] .half .side {
+  background: #1d1d1d;
+}
+.slp-tile[data-t='aperture'] .graph,
+.slp-tile[data-t='auto'] .half .graph {
+  background: #232323;
+}
+.slp-tile[data-t='aqua'] .shot,
+.slp-tile[data-t='auto'] .shot {
+  background: #e8e8e8;
+}
+.slp-tile[data-t='aqua'] .bar,
+.slp-tile[data-t='auto'] .bar {
+  background: linear-gradient(#ececec, #c4c4c4);
+  border-bottom: 1px solid #8e8e8e;
+}
+.slp-tile[data-t='aqua'] .side,
+.slp-tile[data-t='auto'] .side {
+  background: #e1e7ef;
+}
+.slp-tile[data-t='aqua'] .graph,
+.slp-tile[data-t='auto'] .graph {
+  background: #b4b8be;
+}
+.slp-tile .shot .view {
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+.slp-tile .cap {
+  text-align: center;
+  line-height: 1.25;
+}
+
+/* --- key/value readout -------------------------------------------------------- */
+.slp-kv {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  column-gap: 10px;
+  row-gap: 3px;
+  font-size: 11px;
+}
+.slp-kv > :nth-child(odd) {
+  text-align: right;
+  color: #444;
+}
+.slp-kv > :nth-child(even) {
+  user-select: text;
+  -webkit-user-select: text;
+  overflow-wrap: anywhere;
+}
+.slp-ok {
+  color: #217a12;
+}
+.slp-bad {
+  color: #a3271b;
+}
+.slp-error {
+  color: #b3170b;
+  font-size: 11px;
+}
+
+/* --- help sheet (slides down from under the toolbar) ------------------------- */
+.slp-sheet {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  z-index: 5;
+  width: 440px;
+  margin-left: -220px;
+  padding: 18px 20px 14px;
+  background: #ececec;
+  border: 1px solid #8a8a8a;
+  border-top: 0;
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.4),
+    inset 0 6px 6px -6px rgba(0, 0, 0, 0.45);
+  animation: slp-sheet 0.22s ease-out;
+}
+@keyframes slp-sheet {
+  from {
+    transform: translateY(-100%);
+  }
+}
+.slp-sheet h3 {
+  margin: 0 0 8px;
+  font: bold 13px var(--slp-font);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.slp-sheet h3 img {
+  width: 32px;
+  height: 32px;
+}
+.slp-sheet p {
+  margin: 0 0 7px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.slp-sheet .slp-foot {
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+/* ===========================================================================
+   App-wide effects of preferences (applied by store/settings.ts + runtime.tsx)
+   =========================================================================== */
+
+/* Interface size: zoom the chrome but not the graph canvas or viewer canvas
+   (React Flow and the WebGL viewer map pointer coordinates themselves). */
+html[data-ui-scale]
+  :is(.menubar, .toolbar, .statusbar, .workspace > .side, .center .panel-title, .viewer-toolbar, .breadcrumb, .transport, .modal-backdrop > .window) {
+  zoom: var(--ui-scale);
+}
+
+/* Advanced › show flattened node ids */
+html[data-show-node-ids] .react-flow__node::after {
+  content: var(--dr-node-path, '') attr(data-id);
+  position: absolute;
+  left: 0;
+  top: 100%;
+  margin-top: 3px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #ffea8a;
+  font:
+    10px/14px Menlo,
+    Monaco,
+    monospace;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Advanced › FPS / render-time overlay */
+.dr-fps {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 5;
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.62);
+  color: #b8f5a0;
+  font:
+    11px/1.3 Menlo,
+    Monaco,
+    monospace;
+  pointer-events: none;
+  white-space: pre;
+}

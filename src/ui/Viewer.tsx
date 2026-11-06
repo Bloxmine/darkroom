@@ -9,6 +9,7 @@ import { QUALITY_LABELS, useUi, type Quality } from '../store/ui';
 import { Panel } from './Chrome';
 import { Icon } from './Icon';
 import { ToolButton } from './Toolbar';
+import { AnimateButton, Transport } from './Transport';
 import { zoomViewer } from './viewerApi';
 
 function useViewedName() {
@@ -172,6 +173,7 @@ export function Viewer() {
         <ToolButton id="view.zoomIn" />
         <span className="tsep" />
         <ToolButton id="view.compare" />
+        <AnimateButton />
         {ui.compare && <span className="muted small compare-label">A: {compareName || '—'} │ B: {viewed.name}</span>}
         <span className="tsep" />
         <label className="tb-label" title="Preview render resolution. Export always renders at full resolution.">
@@ -210,6 +212,7 @@ export function Viewer() {
           </div>
         )}
       </div>
+      <Transport />
     </Panel>
   );
 }

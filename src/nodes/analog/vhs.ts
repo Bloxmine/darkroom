@@ -1,6 +1,7 @@
 import { defineNode } from '../../core/registry';
 import type { NodeDef } from '../../core/types';
 import { F } from './_shared';
+import { ANIMATE_PARAM, animFloat, animSeed, drift, pnum } from '../../core/motion';
 import { rasterText } from './font5x7';
 
 const C = '#ff8f5a';
@@ -107,8 +108,11 @@ const vhsTracking = defineNode({
     dropouts: { type: 'float', default: 0.3, min: 0, max: 1, step: 0.01, label: 'Dropouts' },
     lines: { type: 'float', default: 480, min: 100, max: 1200, step: 1, label: 'Lines' },
     seed: { type: 'int', default: 7, min: 0, max: 9999, step: 1, label: 'Seed' },
+    animate: ANIMATE_PARAM,
   },
   passes: [{
+    // in motion: new jitter/dropouts every frame, the tracking band drifts
+    uniforms: (c) => ({ ...animSeed(c, 7), ...animFloat(c, (t) => ({ u_bandPosition: pnum(c, 'bandPosition', 0.82) + drift(t * 0.4, 3) * 0.06 })) }),
     frag: F(`
 void main() {
   float L = u_lines;
@@ -176,8 +180,10 @@ const vhsNoise = defineNode({
     chromaRes: { type: 'float', default: 50, min: 5, max: 400, step: 1, label: 'Chroma resolution' },
     lines: { type: 'float', default: 480, min: 100, max: 1200, step: 1, label: 'Lines' },
     seed: { type: 'int', default: 11, min: 0, max: 9999, step: 1, label: 'Seed' },
+    animate: ANIMATE_PARAM,
   },
   passes: [{
+    uniforms: (c) => animSeed(c, 11), // fresh tape noise every frame in motion
     frag: F(`
 void main() {
   vec4 s = texture(u_image, v_uv);

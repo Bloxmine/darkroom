@@ -2,6 +2,7 @@
 import { defineNode } from '../../core/registry';
 import type { NodeDef, PassContext } from '../../core/types';
 import { blurPass, FE, num } from './_shared';
+import { ANIMATE_PARAM, animSeed } from '../../core/motion';
 
 const C = '#ff8a5c';
 const img = { image: { type: 'image' as const } };
@@ -121,6 +122,7 @@ const photocopy = defineNode({
     toner: { type: 'color', default: [0.08, 0.08, 0.09, 1], label: 'Toner' },
     paper: { type: 'color', default: [0.95, 0.94, 0.91, 1], label: 'Paper' },
     seed: { type: 'int', default: 5, min: 0, max: 9999, step: 1, label: 'Seed' },
+    animate: ANIMATE_PARAM,
   },
   passes: [
     { // 0: grey + first threshold (soft)
@@ -156,6 +158,7 @@ void main() {
 }`),
     },
     { // final: toner on paper
+      uniforms: (c: PassContext) => animSeed(c, 5), // in motion: fresh speckle/streaks every frame
       frag: FE(`
 void main() {
   vec2 P = fullPx();

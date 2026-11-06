@@ -7,7 +7,16 @@ import { setSelection } from './doc';
 import { commitGraph, commitProject, emptyProject, markSaved, outputNodeId, setProject, useDoc } from './doc';
 import { engine, previewScale, requestRender, resetRenderSize } from './engine';
 import { status, useUi } from './ui';
+import { useSettings } from './settings';
+import { exportBaseName } from './exportName';
 import { projectForSave, registerProjectTypes } from './extensions';
+import { native } from '../native/native';
+import * as desktop from '../native/files';
+import { IMPORT_ACCEPT, isImportableImage, isRawFile, RAW } from '../core/raw/formats';
+import { embedRawAssets, scheduleRawGc } from '../core/raw/rawAsset';
+import { embedVideoAssets, isVideoFile } from '../core/videoAssets';
+import { importVideoFiles } from './videoImport';
+import { renderReady } from '../core/batch/ready';
 
 const serial = (a: Asset) => ({ id: a.id, name: a.name, mime: a.mime, dataUrl: a.dataUrl });
 
@@ -22,15 +31,17 @@ export async function hydrateAssets(p: Project) {
   const list = Object.values(p.assets ?? {});
   const res = await Promise.allSettled(list.map((s) => assetFromDataUrl(s)));
   res.forEach((r, i) => {
-    if (r.status === 'fulfilled') engine?.addAsset(r.value);
-    else console.warn('[darkroom] could not load asset', list[i].name, r.reason);
+    if (r.status === 'fulfilled') {
+      engine?.addAsset(r.value);
+      if (r.value.raw) list[i].dataUrl = r.value.dataUrl; // embedded RAW moved to IndexedDB: keep autosaves small
+    } else console.warn('[darkroom] could not load asset', list[i].name, r.reason);
   });
 }
 
 export function validateProject(x: unknown): Project {
   const p = x as Project;
   if (!p || typeof p !== 'object' || !p.graph || !Array.isArray(p.graph.nodes) || !Array.isArray(p.graph.edges)) throw new Error('Not a Darkroom project file.');
-  return { version: 1, name: p.name ?? 'Untitled', graph: p.graph, assets: p.assets ?? {}, outputNode: p.outputNode, customNodes: p.customNodes, plugins: p.plugins };
+  return { version: 1, name: p.name ?? 'Untitled', graph: p.graph, assets: p.assets ?? {}, outputNode: p.outputNode, customNodes: p.customNodes, plugins: p.plugins, timeline: p.timeline };
 }
 
 export async function loadProject(p: Project, opts: { viewed?: string | null; dirty?: boolean } = {}) {
@@ -39,13 +50,18 @@ export async function loadProject(p: Project, opts: { viewed?: string | null; di
   engine?.clearCache();
   resetRenderSize();
   setProject(p, opts);
+  scheduleRawGc(() => Object.keys(useDoc.getState().project.assets ?? {}));
   useUi.setState({ fit: true });
   requestRender();
   if (typeMsgs.length) setTimeout(() => status(typeMsgs.join(' ')), 50); // after the caller's "Opened…"
 }
 
 export function serializeProject(): string {
-  return JSON.stringify(projectForSave(useDoc.getState().project));
+  // RAW assets live in IndexedDB; embed them so the .darkroom file is self-contained
+  const r = embedRawAssets(embedVideoAssets(projectForSave(useDoc.getState().project)), (id) => engine?.assets.get(id));
+  if (r.missing.length) setTimeout(() => status(`Not embedded (RAW data missing): ${r.missing.join(', ')}`, 'error'), 50);
+  else if (r.rawBytes > 25e6) setTimeout(() => status(`Saved with ${(r.rawBytes / 1e6).toFixed(0)} MB of embedded RAW files — the project file is large.`), 50);
+  return JSON.stringify(r.project);
 }
 
 function download(blob: Blob, name: string) {
@@ -62,10 +78,17 @@ function download(blob: Blob, name: string) {
 const safeName = (s: string) => s.replace(/[^\w\- ]+/g, '').trim() || 'untitled';
 
 export function saveProjectFile() {
+  if (native) return void desktop.saveProject(false); // desktop app: native dialog, overwrite in place
   const p = useDoc.getState().project;
   download(new Blob([serializeProject()], { type: 'application/json' }), `${safeName(p.name)}.darkroom`);
   markSaved();
   status(`Saved ${safeName(p.name)}.darkroom`);
+}
+
+/** Save As… (desktop: always asks for a path; browser: same as Save). */
+export function saveProjectFileAs() {
+  if (native) return void desktop.saveProject(true);
+  saveProjectFile();
 }
 
 export function pickFiles(accept: string, multiple = false): Promise<File[]> {
@@ -80,6 +103,7 @@ export function pickFiles(accept: string, multiple = false): Promise<File[]> {
 }
 
 export async function openProjectFile() {
+  if (native) return desktop.openProject();
   const [f] = await pickFiles('.darkroom,.json,application/json');
   if (!f) return;
   try {
@@ -92,17 +116,22 @@ export async function openProjectFile() {
   }
 }
 
-/** Create core.image nodes for image files at the current graph level. */
-export async function importImageFiles(files: File[], at?: { x: number; y: number }) {
-  const imgs = files.filter((f) => f.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|bmp)$/i.test(f.name));
-  if (!imgs.length) return;
+/** Create core.image / core.raw nodes for image and camera RAW files at the current graph level. Returns the new node ids. */
+export async function importImageFiles(files: File[], at?: { x: number; y: number }): Promise<string[]> {
+  const vids = files.filter((f) => isVideoFile(f)); // video files → core.video nodes (store/videoImport.ts)
+  if (vids.length) return [...(await importVideoFiles(vids, at)), ...(vids.length < files.length ? await importImageFiles(files.filter((f) => !isVideoFile(f)), at) : [])];
+  const imgs = files.filter((f) => isImportableImage(f.name, f.type));
+  if (!imgs.length) {
+    if (files.length) status(`Not an image or RAW file: ${files.map((f) => f.name).join(', ')}`, 'error');
+    return [];
+  }
   const ids: string[] = [];
   for (const [i, f] of imgs.entries()) {
     try {
       const a = await loadAsset(f, f.name || 'pasted image');
       addAsset(a);
       const pos = at ? { x: at.x + i * 30, y: at.y + i * 30 } : defaultImportPos(i);
-      const n = createNode(IMAGE, pos, { asset: a.id });
+      const n = createNode(a.raw || isRawFile(f.name, f.type) ? RAW : IMAGE, pos, { asset: a.id });
       n.label = a.name.replace(/\.[^.]+$/, '');
       commitGraph((g) => ({ ...g, nodes: [...g.nodes, n] }));
       ids.push(n.id);
@@ -112,6 +141,7 @@ export async function importImageFiles(files: File[], at?: { x: number; y: numbe
     }
   }
   setSelection(ids);
+  return ids;
 }
 
 function defaultImportPos(i: number) {
@@ -122,7 +152,7 @@ function defaultImportPos(i: number) {
 }
 
 export async function importImageDialog() {
-  const files = await pickFiles('image/*', true);
+  const files = native ? await desktop.pickImages() : await pickFiles(IMPORT_ACCEPT + ',video/*,.mp4,.m4v,.mov,.webm,.mkv', true);
   await importImageFiles(files);
 }
 
@@ -139,17 +169,20 @@ export function measureOutput(): { width: number; height: number } {
 export type ExportType = 'image/png' | 'image/jpeg' | 'image/webp';
 export const EXT: Record<ExportType, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
 
-export async function exportBlob(type: ExportType, quality: number): Promise<Blob> {
+export async function exportBlob(type: ExportType, quality: number, scale = 1): Promise<Blob> {
   const s = useDoc.getState();
-  const blob = await engine.export(s.project.graph, { nodeId: outputNodeId(s.project), type, quality });
+  await renderReady(engine, s.project.graph, { nodeId: outputNodeId(s.project), scale: 1 }); // wait for async nodes (full-size RAW decode)
+  const blob = await engine.export(s.project.graph, { nodeId: outputNodeId(s.project), type, quality, scale });
   requestRender();
   return blob;
 }
 
 export async function exportImage(type: ExportType, quality: number) {
   const t0 = performance.now();
-  const blob = await exportBlob(type, quality);
-  download(blob, `${safeName(useDoc.getState().project.name)}.${EXT[type]}`);
+  const blob = await exportBlob(type, quality, useSettings.getState().exportScale); // scale + name: Preferences › Export
+  const name = `${exportBaseName()}.${EXT[type]}`;
+  if (!native) download(blob, name);
+  else if (!(await desktop.saveBlob(blob, name, EXT[type]))) return; // cancelled
   status(`Exported ${(blob.size / 1024).toFixed(0)} KB in ${Math.round(performance.now() - t0)} ms.`);
 }
 
@@ -193,6 +226,7 @@ export async function newProject() {
   p.graph.nodes.push(out);
   p.outputNode = out.id;
   await loadProject(p);
+  if (native) desktop.setDocPath(null);
   status('New project.');
 }
 

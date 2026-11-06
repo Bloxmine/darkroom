@@ -418,6 +418,9 @@ export async function loadInstalledPlugins(): Promise<string[]> {
   return problems;
 }
 
+/** Host policy (set from Preferences › Plugins & AI by src/ui/prefs/runtime.ts). */
+export const pluginPolicy = { allowCode: () => true };
+
 export interface InstallOptions {
   source: string;
   url?: string;
@@ -437,6 +440,7 @@ export async function installPlugin(o: InstallOptions): Promise<PluginState> {
     const d = parseDataPlugin(o.source);
     loaded = { meta: d.meta, nodes: d.nodes, presets: d.presets };
   } else {
+    if (!pluginPolicy.allowCode()) throw new Error('Code plugins are turned off. Enable “Allow code plugins” in Preferences › Plugins & AI to install JavaScript plugins.');
     if (!o.trusted) throw new TrustRequiredError(sourceName);
     const def = await evaluateCodePlugin(o.source, o.url);
     loaded = { meta: def, nodes: def.nodes ?? [], presets: (def.presets as PresetDef[] | (() => PresetDef[])) ?? [] };

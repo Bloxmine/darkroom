@@ -13,6 +13,26 @@ export interface RenderOptions {
   scale?: number;
   /** Max long edge for preview; overrides `scale` if given. */
   maxSize?: number;
+  /**
+   * Render into a separate cache namespace (e.g. 'thumb' for node thumbnails)
+   * so renders at another scale don't evict the viewer's per-node cache.
+   * Tagged renders reuse the main namespace's finished CPU textures (decoded images).
+   */
+  cacheTag?: string;
+}
+
+/** Options for `Engine.thumbnail`. */
+export interface ThumbnailOptions {
+  /** Only use cache entries evaluated for this (root) graph at the current time (skip stale ones). */
+  graph?: Graph;
+  /** Show the red channel as greyscale (mask ports). */
+  mask?: boolean;
+}
+
+interface CacheNamespace {
+  cache: Map<string, CacheEntry>;
+  cpu: Map<string, CpuEntry>;
+  seen: Map<string, { graph: Graph; time: number }>;
 }
 
 export interface RenderResult {
@@ -54,7 +74,7 @@ interface CpuEntry {
 }
 
 /** Built-in uniform names; params whose `u_<key>` would collide get no auto-uniform (use `uniforms()` instead). */
-const RESERVED = new Set(['u_resolution', 'u_scale', 'u_time', 'u_iteration', 'u_prev']);
+const RESERVED = new Set(['u_resolution', 'u_scale', 'u_time', 'u_iteration', 'u_prev', 'u_frame']);
 
 const UNIFORM_TYPES: Partial<Record<ParamDef['type'], string>> = {
   float: 'float',
@@ -77,12 +97,27 @@ export class Engine {
   /** Called when async work finishes (cpu nodes) and a re-render is needed. */
   onInvalidate: () => void = () => {};
   time = 0;
+  /** Timeline frame index, exposed to shaders as `u_frame` (0 for stills / still export). See docs/VIDEO.md. */
+  frame = 0;
+  /** Bumped by the host every displayed frame while live sources exist; re-runs `volatile: 'live'` cpu steps. */
+  liveTick = 0;
   projectSize: { width: number; height: number } | null = null;
+  /** In-flight async cpu() steps (see `whenCpuIdle`). */
+  private cpuInflight = new Set<Promise<unknown>>();
 
   private cache = new Map<string, CacheEntry>();
   private cpu = new Map<string, CpuEntry>();
   private presentProg = PRESENT_FRAG;
   private unsub: () => void;
+  /** Flat id → (graph, time) it was last successfully evaluated for, in the active namespace. */
+  private seen = new Map<string, { graph: Graph; time: number }>();
+  /** Extra cache namespaces (RenderOptions.cacheTag). */
+  private namespaces = new Map<string, CacheNamespace>();
+  /** During a tagged render: the main namespace's CPU entries, reused when only the scale differs. */
+  private borrowCpu: Map<string, CpuEntry> | null = null;
+  private thumbTargets = new Map<string, Tex>();
+  /** Time of the last render()/present() call (GPU work submitted). */
+  private lastSubmit = 0;
 
   constructor(public canvas: HTMLCanvasElement | OffscreenCanvas) {
     this.gl = new GL(canvas);
@@ -108,6 +143,8 @@ export class Engine {
     this.cache.clear();
     for (const c of this.cpu.values()) Object.values(c.textures).forEach((t) => this.gl.destroy(t));
     this.cpu.clear();
+    this.seen.clear();
+    for (const tag of [...this.namespaces.keys()]) this.dropCache(tag);
   }
 
   /** Full-resolution project size: explicit, else first Image node's asset, else 1920x1080. */
@@ -115,7 +152,7 @@ export class Engine {
     if (this.projectSize) return this.projectSize;
     const flat = flattenGraph(graph);
     for (const n of flat.nodes) {
-      if (n.type !== IMAGE) continue;
+      if (n.type !== IMAGE && n.type !== 'core.video' && n.type !== 'core.raw') continue;
       const a = this.assets.get(String(n.params.asset ?? ''));
       if (a?.width && a.height) return { width: a.width, height: a.height };
     }
@@ -123,6 +160,8 @@ export class Engine {
   }
 
   render(graph: Graph, opts: RenderOptions = {}): RenderResult {
+    this.lastSubmit = performance.now();
+    if (opts.cacheTag) return this.inNamespace(opts.cacheTag, () => this.render(graph, { ...opts, cacheTag: undefined }));
     const t0 = performance.now();
     const flat = flattenGraph(graph);
     const nodes = new Map(flat.nodes.map((n) => [n.id, n]));
@@ -169,7 +208,7 @@ export class Engine {
       let res: CacheEntry | null = null;
       try {
         res = this.evalNode(node, incoming.get(id) ?? new Map(), (src) => (nodes.has(src) ? evalNode(src) : null), scale, projectSize);
-        if (this.errors.get(id)?.startsWith('[pending]')) this.errors.delete(id);
+        if (res && this.errors.get(id)?.startsWith('[pending]')) this.errors.delete(id); // keep the marker while async cpu() is pending (renderReady / ui.pending rely on it)
       } catch (e) {
         this.errors.set(id, e instanceof ShaderCompileError ? e.log : String((e as Error)?.message ?? e));
         if (e instanceof ShaderCompileError) console.warn(`[darkroom] ${node.type}:`, e.log);
@@ -177,6 +216,7 @@ export class Engine {
       }
       visiting.delete(id);
       memo.set(id, res);
+      if (res) this.seen.set(id, { graph, time: this.time });
       return res;
     };
 
@@ -254,20 +294,35 @@ export class Engine {
     let cpuKey = '';
     if (def.cpu) {
       cpuKey = JSON.stringify([node.type, node.params, scale, def.cpuReadsInputs ? inputKeys : 0]);
+      // time-varying sources re-run per time / per live tick
+      if (def.volatile) cpuKey = JSON.stringify([node.type, node.params, scale, def.cpuReadsInputs ? inputKeys : 0, def.volatile === 'live' ? this.liveTick : this.time]);
+      const borrowed = def.cpuReadsInputs ? undefined : this.borrowedCpu(node);
+      if (borrowed) {
+        // tagged namespace: reuse the main namespace's CPU result (same params, other scale)
+        cpuKey = 'borrow:' + borrowed.key;
+        if (this.cpu.get(node.id)?.key !== cpuKey) {
+          this.cpu.get(node.id) && Object.values(this.cpu.get(node.id)!.textures).forEach((t) => this.gl.destroy(t));
+          this.cpu.set(node.id, { key: cpuKey, status: 'done', textures: {} });
+        }
+      }
       const centry = this.cpu.get(node.id);
-      if (!centry || centry.key !== cpuKey) {
+      // a pending volatile source is asked again: its frame may be ready synchronously by now
+      if (!centry || centry.key !== cpuKey || (def.volatile && centry.status === 'pending')) {
         this.runCpu(node, def, cpuKey, inputs, scale, projectSize);
       }
       const c = this.cpu.get(node.id)!;
-      if (c.status === 'pending') {
+      // volatile sources keep showing their previous frame while the next one decodes
+      const stale = !!def.volatile && c.status === 'pending' && Object.keys(c.textures).length > 0;
+      if (stale) cpuKey += '~stale';
+      if (c.status === 'pending' && !stale) {
         this.errors.set(node.id, '[pending] loading…');
         return null;
       }
       if (c.status === 'error') throw new Error(c.error);
-      cpuTex = c.textures;
+      cpuTex = borrowed?.textures ?? c.textures;
     }
 
-    const key = JSON.stringify([node.type, node.params, width, height, scale, this.time, inputKeys, cpuKey]);
+    const key = JSON.stringify([node.type, node.params, width, height, scale, this.time, inputKeys, cpuKey]) + (this.frame ? '#' + this.frame : '');
     const cached = this.cache.get(node.id);
     if (cached && cached.key === key) return cached;
 
@@ -307,7 +362,7 @@ export class Engine {
     }
 
     def.passes.forEach((pass, i) => {
-      const ctx: PassContext = { params: node.params, width, height, scale, inputSizes, passSizes };
+      const ctx: PassContext = { params: node.params, width, height, scale, inputSizes, passSizes, time: this.time, frame: this.frame };
       const [pw, ph] = pass.size ? pass.size(ctx) : [width, height];
       const header = this.header(inputNames, i, cpuNames, Object.entries(def.params));
       const prog = this.gl.program(header + (typeof pass.frag === 'function' ? pass.frag(node.params) : pass.frag));
@@ -329,6 +384,7 @@ export class Engine {
           u_resolution: [pw, ph],
           u_scale: scale,
           u_time: this.time,
+          u_frame: this.frame,
           u_iteration: r,
           ...extra,
         });
@@ -362,19 +418,20 @@ export class Engine {
     scale: number,
     projectSize: { width: number; height: number },
   ) {
-    const old = this.cpu.get(node.id);
+    const cpu = this.cpu; // the active namespace's map (async results must land there)
+    const old = cpu.get(node.id);
     const entry: CpuEntry = { key, status: 'pending', textures: old?.textures ?? {} };
-    this.cpu.set(node.id, entry);
+    cpu.set(node.id, entry);
     const finish = (res: Record<string, TexSource>) => {
-      if (this.cpu.get(node.id) !== entry) return; // superseded
+      if (cpu.get(node.id) !== entry) return; // superseded
       const textures: Record<string, Tex> = {};
-      for (const [k, src] of Object.entries(res)) textures[k] = this.gl.upload(src, entry.textures[k]);
+      for (const [k, src] of Object.entries(res)) textures[k] = def.volatile ? this.gl.uploadFrame(src, entry.textures[k]) : this.gl.upload(src, entry.textures[k]);
       for (const [k, t] of Object.entries(entry.textures)) if (!(k in res)) this.gl.destroy(t);
       entry.textures = textures;
       entry.status = 'done';
     };
     const fail = (e: unknown) => {
-      if (this.cpu.get(node.id) !== entry) return;
+      if (cpu.get(node.id) !== entry) return;
       entry.status = 'error';
       entry.error = String((e as Error)?.message ?? e);
     };
@@ -384,6 +441,8 @@ export class Engine {
         scale,
         projectSize,
         getAsset: (id) => this.assets.get(id),
+        time: this.time,
+        frame: this.frame,
         readInput: (name) => {
           const t = inputs[name];
           if (!t) return null;
@@ -391,7 +450,11 @@ export class Engine {
         },
       });
       if (r instanceof Promise) {
-        r.then(finish, fail).finally(() => this.onInvalidate());
+        const done = r.then(finish, fail).finally(() => {
+          this.cpuInflight.delete(done);
+          this.onInvalidate();
+        });
+        this.cpuInflight.add(done);
       } else finish(r);
     } catch (e) {
       fail(e);
@@ -400,7 +463,7 @@ export class Engine {
 
   private header(inputs: string[], passIndex: number, cpuNames: string[], params: [string, ParamDef][]) {
     const lines = ['#version 300 es', 'precision highp float;', 'precision highp int;', 'in vec2 v_uv;', 'out vec4 fragColor;',
-      'uniform vec2 u_resolution;', 'uniform float u_scale;', 'uniform float u_time;', 'uniform int u_iteration;'];
+      'uniform vec2 u_resolution;', 'uniform float u_scale;', 'uniform float u_time;', 'uniform int u_iteration;', 'uniform int u_frame;'];
     const sampler = (n: string) => lines.push(`uniform sampler2D ${n};`, `uniform vec2 ${n}_size;`);
     sampler('u_prev');
     inputs.forEach((n) => sampler('u_' + n));
@@ -413,8 +476,19 @@ export class Engine {
     return lines.join('\n') + '\n' + GLSL_LIB + '\n#line 1\n';
   }
 
+  /** Resolves when no async cpu() step is in flight (video export waits on this before reading a frame). */
+  async whenCpuIdle(): Promise<void> {
+    while (this.cpuInflight.size) await Promise.allSettled([...this.cpuInflight]);
+  }
+
+  /** Is an async cpu() step in flight? */
+  get cpuBusy() {
+    return this.cpuInflight.size > 0;
+  }
+
   /** Draw a rendered texture to the canvas (the viewer). */
   present(res: Tex | null, opts: PresentOptions) {
+    this.lastSubmit = performance.now();
     const gl = this.gl.gl;
     const bg = opts.background ?? [0.11, 0.11, 0.12];
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -449,6 +523,167 @@ export class Engine {
     };
     restore(res);
     if (opts.compare) restore(opts.compare);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Cache namespaces + node thumbnails
+  // ---------------------------------------------------------------------------
+
+  private inNamespace<T>(tag: string, fn: () => T): T {
+    let ns = this.namespaces.get(tag);
+    if (!ns) this.namespaces.set(tag, (ns = { cache: new Map(), cpu: new Map(), seen: new Map() }));
+    const main = { cache: this.cache, cpu: this.cpu, seen: this.seen, borrow: this.borrowCpu };
+    this.cache = ns.cache;
+    this.cpu = ns.cpu;
+    this.seen = ns.seen;
+    this.borrowCpu = main.cpu;
+    try {
+      return fn();
+    } finally {
+      this.cache = main.cache;
+      this.cpu = main.cpu;
+      this.seen = main.seen;
+      this.borrowCpu = main.borrow;
+    }
+  }
+
+  /** In a tagged render: the main namespace's finished CPU entry for `node` if only its scale differs. */
+  private borrowedCpu(node: GraphNode): CpuEntry | undefined {
+    const m = this.borrowCpu?.get(node.id);
+    if (!m || m.status !== 'done') return undefined;
+    try {
+      const [type, params, , reads] = JSON.parse(m.key) as [string, unknown, number, unknown];
+      if (reads !== 0 || type !== node.type || JSON.stringify(params) !== JSON.stringify(node.params)) return undefined;
+    } catch {
+      return undefined;
+    }
+    return m;
+  }
+
+  /** Free a tagged cache namespace (e.g. when thumbnails are turned off). */
+  dropCache(tag: string) {
+    const ns = this.namespaces.get(tag);
+    if (!ns) return;
+    for (const e of ns.cache.values()) e.owned.forEach((t) => this.gl.release(t));
+    for (const c of ns.cpu.values()) Object.values(c.textures).forEach((t) => this.gl.destroy(t));
+    this.namespaces.delete(tag);
+  }
+
+  /**
+   * The cache entry for a flat node id: the main namespace first, then tagged ones.
+   * With `graph`, only entries evaluated for that graph (and the current time) count.
+   */
+  private findEntry(id: string, graph?: Graph): { tag: string; entry: CacheEntry } | null {
+    const fresh = (seen: CacheNamespace['seen'], anyTime = false) => {
+      if (!graph) return true;
+      const s = seen.get(id);
+      return !!s && s.graph === graph && (anyTime || s.time === this.time);
+    };
+    // The main (viewer) cache is re-rendered every frame during playback, so a thumbnail that
+    // trails the playhead by a frame is fine there; tagged caches must match the current time.
+    const main = this.cache.get(id);
+    if (main && fresh(this.seen, true)) return { tag: '', entry: main };
+    for (const [tag, ns] of this.namespaces) {
+      const e = ns.cache.get(id);
+      if (e && fresh(ns.seen)) return { tag, entry: e };
+    }
+    return null;
+  }
+
+  /** Is the node's output cached (and, with `graph`, current for it) in any namespace? */
+  isCached(id: string, graph?: Graph) {
+    return !!this.findEntry(id, graph);
+  }
+
+  /** Version of a node's cached output (changes whenever its pixels may have); null if not cached. */
+  cacheKey(id: string, graph?: Graph): string | null {
+    const f = this.findEntry(id, graph);
+    return f ? f.tag + '|' + f.entry.key : null;
+  }
+
+  /**
+   * Downsample a node's CACHED output on the GPU to fit `maxSize` (one box-filtered
+   * pass into a small pooled RGBA8 target) and read the few KB back asynchronously
+   * (PBO + fence, so it never stalls the render loop). Null if the node isn't cached.
+   * Pixels are straight (unpremultiplied) RGBA, top row first.
+   */
+  thumbnail(id: string, port?: string, maxSize = 160, opts: ThumbnailOptions = {}): Promise<ImageData | null> {
+    const f = this.findEntry(id, opts.graph);
+    if (!f) return Promise.resolve(null);
+    const outs = f.entry.outputs;
+    const src = (port ? outs[port] : undefined) ?? outs[Object.keys(outs)[0]] ?? null;
+    if (!src) return Promise.resolve(null);
+    const k = Math.min(1, maxSize / Math.max(src.width, src.height));
+    const w = Math.max(1, Math.round(src.width * k));
+    const h = Math.max(1, Math.round(src.height * k));
+    const tk = w + 'x' + h;
+    let dst = this.thumbTargets.get(tk);
+    if (!dst) {
+      if (this.thumbTargets.size > 32) {
+        for (const t of this.thumbTargets.values()) this.gl.destroy(t);
+        this.thumbTargets.clear();
+      }
+      dst = this.gl.createTarget(w, h, 'linear', false);
+      this.thumbTargets.set(tk, dst);
+    }
+    const gl = this.gl.gl;
+    // nearest-filtered targets would alias: sample them bilinearly for the box filter
+    // (linear and mipmapped textures are left as they are; no sync getTexParameter)
+    const nearest = src.filter === 'nearest';
+    if (nearest) {
+      gl.bindTexture(gl.TEXTURE_2D, src.tex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    }
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    const ratio = Math.max(src.width / w, src.height / h);
+    this.gl.draw(this.gl.program(THUMB_FRAG), dst, { u_src: src }, {
+      u_resolution: [w, h],
+      u_taps: Math.max(1, Math.min(8, Math.ceil(ratio / 2))),
+      u_mask: opts.mask ? 1 : 0,
+    });
+    if (nearest) {
+      gl.bindTexture(gl.TEXTURE_2D, src.tex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    }
+    // async readback
+    const bytes = w * h * 4;
+    const pbo = gl.createBuffer()!;
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pbo);
+    gl.bufferData(gl.PIXEL_PACK_BUFFER, bytes, gl.STREAM_READ);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fb);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, 0);
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+    gl.flush();
+    const fenced = performance.now();
+    return new Promise((resolve) => {
+      const done = (ok: boolean) => {
+        let img: ImageData | null = null;
+        if (ok && !gl.isContextLost()) {
+          const px = new Uint8ClampedArray(bytes);
+          gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pbo);
+          gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, px);
+          gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+          img = new ImageData(px, w, h);
+        }
+        gl.deleteBuffer(pbo);
+        if (sync) gl.deleteSync(sync);
+        resolve(img);
+      };
+      // getBufferSubData makes the browser drain the GPU queue: read only once the fence has
+      // passed AND no newer engine work was submitted (else it would wait for that frame too).
+      // If the engine stays busy, give up (null) rather than stall; the caller retries later.
+      const poll = () => {
+        if (!sync || gl.isContextLost()) return done(false);
+        const st = gl.clientWaitSync(sync, 0, 0);
+        if ((st === gl.ALREADY_SIGNALED || st === gl.CONDITION_SATISFIED) && this.lastSubmit < fenced) return done(true);
+        if (performance.now() - fenced > 3000) return done(false);
+        if (st === gl.WAIT_FAILED) return done(false);
+        setTimeout(poll, 8);
+      };
+      setTimeout(poll, 0);
+    });
   }
 
   /** Read a rendered texture back as ImageData (8-bit, clamped). */
@@ -500,4 +735,32 @@ void main() {
   vec3 col = mix(vec3(chk), clamp(c.rgb, 0.0, 1.0), clamp(c.a, 0.0, 1.0));
   if (u_split >= 0.0 && abs(p.x - u_split) < 1.0) col = vec3(1.0);
   fragColor = vec4(col, 1.0);
+}`;
+
+
+/** Thumbnail downsample: an n×n grid of bilinear taps (≈2n×2n box) per output pixel, premultiplied. */
+const THUMB_FRAG = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 fragColor;
+uniform sampler2D u_src;
+uniform vec2 u_resolution;
+uniform int u_taps;
+uniform int u_mask;
+void main() {
+  vec2 px = 1.0 / u_resolution;
+  vec4 acc = vec4(0.0);
+  float n = float(u_taps);
+  for (int y = 0; y < 8; y++) {
+    if (y >= u_taps) break;
+    for (int x = 0; x < 8; x++) {
+      if (x >= u_taps) break;
+      vec2 o = (vec2(float(x), float(y)) + 0.5) / n - 0.5;
+      vec4 c = clamp(texture(u_src, v_uv + o * px), 0.0, 1.0);
+      acc += vec4(c.rgb * c.a, c.a);
+    }
+  }
+  acc /= n * n;
+  if (u_mask == 1) { float m = acc.a > 0.0 ? acc.r / acc.a : 0.0; fragColor = vec4(m, m, m, 1.0); return; }
+  fragColor = acc.a > 0.0 ? vec4(acc.rgb / acc.a, acc.a) : vec4(0.0);
 }`;

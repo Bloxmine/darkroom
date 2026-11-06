@@ -1,6 +1,7 @@
 import { defineNode } from '../../core/registry';
 import type { NodeDef } from '../../core/types';
 import { F } from './_shared';
+import { ANIMATE_PARAM, animSeed } from '../../core/motion';
 
 const C = '#7cf29c';
 const img = { image: { type: 'image' as const } };
@@ -24,8 +25,10 @@ const glitch = defineNode({
     corrupt: { type: 'float', default: 0.5, min: 0, max: 1, step: 0.01, label: 'Colour corruption' },
     rgbSplit: { type: 'float', default: 8, min: 0, max: 100, step: 0.5, pixels: true, label: 'RGB split' },
     seed: { type: 'int', default: 42, min: 0, max: 9999, step: 1, label: 'Seed' },
+    animate: ANIMATE_PARAM,
   },
   passes: [{
+    uniforms: (c) => animSeed(c, 42, 'seed', 2), // new glitches every 2 frames in motion
     frag: F(`
 void main() {
   vec2 px = pixelCoord();

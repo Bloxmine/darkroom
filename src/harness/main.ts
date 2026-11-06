@@ -7,6 +7,7 @@
  *   &scale=0.5      render scale (default 1)
  *   &img2=landscape second sample connected to a node's 2nd image input
  *   &p.<key>=value  override a preset's exposed param, e.g. &p.amount=0.8
+ *   &wait=60        max seconds to wait for async (pending) cpu nodes, default 2.5
  *
  * Sets window.__result = { ok, ms, width, height, errors } when done.
  */
@@ -56,7 +57,8 @@ async function main() {
         b.link(src2, n.id, imgInputs[1][0]);
       }
       last = n.id;
-      if (q.get('port')) last = JSON.stringify({ node: n.id, port: q.get('port') });
+      const port = q.get('port') ?? Object.keys(def.outputs ?? { out: 0 })[0];
+      if (port !== 'out') last = JSON.stringify({ node: n.id, port });
     }
     const out = createNode(OUTPUT);
     out.id = 'output';
@@ -73,8 +75,12 @@ async function main() {
 
   const run = () => engine.render(graph, { scale });
   let res = run();
-  // let async cpu nodes settle
-  for (let i = 0; i < 50 && [...engine.errors.values()].some((e) => e.startsWith('[pending]')); i++) {
+  // let async cpu nodes settle (&wait=<seconds>, default 2.5; AI nodes may need a model download)
+  const waitSteps = Math.round((Number(q.get('wait')) || 2.5) * 20);
+  // (also checks the engine's cpu entries: the '[pending]' error is cleared as soon as evalNode returns)
+  const cpuEntries = () => [...((engine as unknown as { cpu?: Map<string, { status: string }> }).cpu?.values() ?? [])];
+  const pending = () => [...engine.errors.values()].some((e) => e.startsWith('[pending]')) || cpuEntries().some((c) => c.status === 'pending');
+  for (let i = 0; i < waitSteps && pending(); i++) {
     await new Promise((r) => setTimeout(r, 50));
     res = run();
   }

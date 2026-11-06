@@ -20,9 +20,10 @@ const tiltShift = defineNode({
     'Fake miniature: a sharp focus band with lens blur (disc bokeh, bright highlights bloom into discs) growing smoothly away from it, ' +
     'plus the saturation/contrast boost that sells the toy-model look.',
   tags: ['tilt shift', 'miniature', 'toy', 'bokeh', 'blur', 'lens', 'diorama', 'depth of field'],
-  inputs: img,
+  inputs: { ...img, depth: { type: 'mask', optional: true, label: 'Depth (optional)' } },
   params: {
     center: { type: 'float', default: 0.6, min: 0, max: 1, step: 0.005, label: 'Focus position' },
+    focusDepth: { type: 'float', default: 0.5, min: 0, max: 1, step: 0.005, label: 'Focus depth', description: 'With a depth map connected (near = white): the depth kept sharp; width/falloff then apply in depth.' },
     angle: { type: 'float', default: 0, min: -90, max: 90, step: 1, label: 'Band angle' },
     width: { type: 'float', default: 0.12, min: 0, max: 1, step: 0.005, label: 'Sharp band width' },
     falloff: { type: 'float', default: 0.35, min: 0.01, max: 1, step: 0.005, label: 'Falloff' },
@@ -35,6 +36,8 @@ const tiltShift = defineNode({
   passes: [{
     frag: FE(`
 float blurAmt(vec2 uv) {
+  // depth input connected (an unconnected optional input is a 1x1 fallback)
+  if (u_depth_size.x > 1.5) return smoothstep(u_width * 0.5, u_width * 0.5 + u_falloff, abs(texture(u_depth, uv).r - u_focusDepth));
   vec2 asp = vec2(u_resolution.x / u_resolution.y, 1.0);
   vec2 d = vec2(sin(radians(u_angle)), cos(radians(u_angle)));
   float dist = abs(dot((uv - vec2(0.5, u_center)) * asp, d));
@@ -326,9 +329,9 @@ const anaglyph = defineNode({
   color: C,
   description:
     'Red/cyan 3D glasses image. Stereo views are synthesised by shifting pixels horizontally by a depth guess (lower in frame and brighter/more ' +
-    'saturated = nearer, blended with a smooth luminance-based depth) or by a flat offset. Colour, half-colour, grey or Dubois-optimised encoding.',
+    'saturated = nearer, blended with a smooth luminance-based depth), by a connected depth map (e.g. AI → Depth Map), or by a flat offset. Colour, half-colour, grey or Dubois-optimised encoding.',
   tags: ['anaglyph', '3d', 'stereo', 'red cyan', 'glasses', 'stereoscopic', '50s'],
-  inputs: img,
+  inputs: { ...img, depth: { type: 'mask', optional: true, label: 'Depth (optional, near = white)' } },
   params: {
     depthMode: { type: 'enum', default: 'Depth guess', options: ['Depth guess', 'Flat offset'], label: 'Depth' },
     separation: { type: 'float', default: 24, min: 0, max: 80, step: 0.5, pixels: true, label: 'Separation', description: 'Maximum horizontal disparity in full-res px.' },
@@ -363,7 +366,8 @@ void main() {
     },
     {
       frag: FE(`
-float depthAt(vec2 uv) { return u_depthMode == 1 ? 1.0 : texture(u_pass1, uv).r; }
+// a connected depth map (e.g. AI Depth Map) overrides the guess; unconnected = 1x1 fallback
+float depthAt(vec2 uv) { return u_depthMode == 1 ? 1.0 : u_depth_size.x > 1.5 ? texture(u_depth, uv).r : texture(u_pass1, uv).r; }
 vec3 view(float eye) { // eye = -1 left, +1 right
   vec2 uv = v_uv;
   // two fixed-point iterations so the shift uses the depth at the source pixel

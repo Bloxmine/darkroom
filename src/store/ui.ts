@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useSettings } from './settings';
 
 export type Quality = 'draft' | 'half' | 'screen' | 'full';
 
@@ -9,7 +10,7 @@ export const QUALITY_LABELS: Record<Quality, string> = {
   full: 'Full resolution (1:1)',
 };
 
-export type DialogId = 'export' | 'about' | 'shortcuts' | 'confirmNew' | 'prefs' | 'plugins' | null;
+export type DialogId = 'export' | 'exportVideo' | 'about' | 'shortcuts' | 'confirmNew' | 'prefs' | 'plugins' | 'batch' | null;
 
 export interface QuickAddState {
   /** Screen (client) position of the popup. */
@@ -65,9 +66,9 @@ export const useUi = create<UiState>(() => ({
   zoom: 1,
   panX: 0,
   panY: 0,
-  compare: false,
+  compare: useSettings.getState().compareDefault, // Preferences › Viewer
   split: 0.5,
-  quality: 'screen',
+  quality: useSettings.getState().defaultQuality,
   showLibrary: true,
   showProperties: true,
   libraryWidth: 220,

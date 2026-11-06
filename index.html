@@ -8,12 +8,15 @@
     <script>
       // Apply the saved UI theme before first paint (see src/store/settings.ts).
       (function () {
-        var t = 'classic';
+        var t = 'auto';
         try {
           var v = localStorage.getItem('darkroom.theme');
-          if (v === 'aperture' || v === 'aqua' || v === 'classic') t = v;
+          if (v === 'aperture' || v === 'aqua' || v === 'classic' || v === 'auto') t = v;
         } catch (e) {}
+        if (t === 'auto') t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'aperture' : 'aqua';
         document.documentElement.setAttribute('data-theme', t);
+        // Desktop (Electron) build on macOS: native menu bar + inset traffic lights (see src/native/)
+        if (window.darkroomNative && window.darkroomNative.platform === 'darwin') document.documentElement.classList.add('native-mac');
       })();
     </script>
     <style>

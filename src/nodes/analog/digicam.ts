@@ -1,6 +1,7 @@
 import { defineNode } from '../../core/registry';
 import type { NodeDef } from '../../core/types';
 import { blurPass, F, num } from './_shared';
+import { ANIMATE_PARAM, animSeed } from '../../core/motion';
 
 const C = '#5ad1ff';
 const img = { image: { type: 'image' as const } };
@@ -93,8 +94,10 @@ const ccdSensor = defineNode({
     noiseSize: { type: 'float', default: 2, min: 0.5, max: 10, step: 0.1, pixels: true, label: 'Noise blotch size' },
     fixedPattern: { type: 'float', default: 0.3, min: 0, max: 1, step: 0.01, label: 'Fixed-pattern noise' },
     seed: { type: 'int', default: 5, min: 0, max: 9999, step: 1, label: 'Seed' },
+    animate: ANIMATE_PARAM,
   },
   passes: [{
+    uniforms: (c) => animSeed(c, 5), // fresh sensor noise every frame in motion
     frag: F(`
 void main() {
   vec4 src = texture(u_image, v_uv);

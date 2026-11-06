@@ -61,7 +61,10 @@ export type TexSource =
   | HTMLCanvasElement
   | OffscreenCanvas
   | ImageData
-  | RawTex;
+  | RawTex
+  // video sources (nodes with `volatile`): uploaded without mipmaps, texture reused between frames
+  | HTMLVideoElement
+  | VideoFrame;
 
 export interface RawTex {
   width: number;
@@ -85,6 +88,9 @@ export interface PassContext {
   inputSizes: Record<string, { width: number; height: number }>;
   /** Sizes of passes already rendered in this node, by index. */
   passSizes: { width: number; height: number }[];
+  /** Engine time (s) and frame index (0 for stills); e.g. animate a seed via `uniforms()`. See docs/VIDEO.md. */
+  time?: number;
+  frame?: number;
 }
 
 export interface ShaderPass {
@@ -93,7 +99,8 @@ export interface ShaderPass {
    *   precision highp float; in vec2 v_uv; out vec4 fragColor;
    *   uniform vec2 u_resolution;   // this pass's output size in px
    *   uniform float u_scale;       // render scale (multiply pixel-unit params by this)
-   *   uniform float u_time;        // seconds, for animated previews (0 at export)
+   *   uniform float u_time;        // seconds: timeline time (0 for stills / still export)
+   *   uniform int u_frame;         // frame index on the timeline (0 for stills / still export)
    *   uniform sampler2D u_<input>; uniform vec2 u_<input>_size;   // every node input
    *   uniform sampler2D u_pass<N>; uniform vec2 u_pass<N>_size;   // earlier passes of this node
    *   uniform sampler2D u_prev;    uniform vec2 u_prev_size;      // previous pass (or first input on pass 0)
@@ -126,6 +133,10 @@ export interface CpuContext {
   getAsset: (id: string) => Asset | undefined;
   /** Read back an input image as RGBA float pixels (slow; use sparingly). */
   readInput: (name: string) => RawTex | null;
+  /** Engine time in seconds (timeline position; 0 for stills). See docs/VIDEO.md. */
+  time?: number;
+  /** Engine frame index (u_frame; 0 for stills). */
+  frame?: number;
 }
 
 export interface NodeDef {
@@ -151,6 +162,13 @@ export interface NodeDef {
   cpu?: (ctx: CpuContext) => Record<string, TexSource> | Promise<Record<string, TexSource>>;
   /** Set true if cpu() uses readInput (forces recompute when inputs change). */
   cpuReadsInputs?: boolean;
+  /**
+   * Time-varying CPU source (video, webcam). 'time': cpu() re-runs whenever the engine time changes
+   * (e.g. a video decoded at `ctx.time`); 'live': re-runs every displayed frame while present (webcam).
+   * Textures are re-uploaded in place (no mipmaps) and the previous frame stays visible while an async
+   * cpu() is pending. See docs/VIDEO.md.
+   */
+  volatile?: 'time' | 'live';
   /**
    * Output size at FULL resolution. Default: size of first connected image input,
    * else the project size. The engine multiplies by render scale.
@@ -221,10 +239,54 @@ export interface Asset {
   image?: ImageBitmap;
   /** Raw text, if a text file (e.g. .cube). */
   text?: string;
-  /** Data URL for saving inside the project. */
+  /** Data URL for saving inside the project. RAW assets use an `idb:raw/<id>` reference instead (bytes live in IndexedDB). */
   dataUrl: string;
   width?: number;
   height?: number;
+  /** Camera RAW file (developed by the `core.raw` node, see core/raw). */
+  raw?: RawAssetData;
+  /** Video assets: the file (bytes also live in IndexedDB; see core/videoAssets.ts). */
+  blob?: Blob;
+  /** Video assets: duration in seconds and average frame rate. */
+  duration?: number;
+  fps?: number;
+}
+
+/** Project timeline settings (video / animated noise). See docs/VIDEO.md. */
+export interface TimelineSettings {
+  fps: number;
+  /** Seconds. */
+  duration: number;
+  loop?: boolean;
+  /** Play time even without video sources (animated noise on stills). */
+  animate?: boolean;
+  /** true = realtime playback (drops frames), false = render every frame. */
+  realtime?: boolean;
+}
+
+/** Original RAW bytes + camera metadata. */
+export interface RawAssetData {
+  bytes: Uint8Array;
+  meta: RawMeta;
+}
+
+export interface RawMeta {
+  make: string;
+  model: string;
+  iso: number;
+  /** Seconds. */
+  shutter: number;
+  aperture: number;
+  /** mm. */
+  focalLength: number;
+  lens?: string;
+  /** ms since epoch. */
+  timestamp?: number;
+  /** Sensor size before orientation. */
+  width: number;
+  height: number;
+  /** LibRaw flip (0 none, 3 = 180°, 5 = 90° CCW, 6 = 90° CW). */
+  flip: number;
 }
 
 export interface Project {
@@ -239,6 +301,8 @@ export interface Project {
   customNodes?: SerializedNodeDef[];
   /** Plugins that provided node types used by this project (for "missing plugin" messages). */
   plugins?: ProjectPluginRef[];
+  /** Timeline (video / animation) settings. */
+  timeline?: TimelineSettings;
 }
 
 /** A pass in JSON form (no functions). See core/serialize.ts. */

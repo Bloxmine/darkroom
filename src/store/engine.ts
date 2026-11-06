@@ -4,6 +4,7 @@ import type { Tex } from '../core/gl';
 import type { Graph } from '../core/types';
 import { effectiveViewed, useDoc } from './doc';
 import { useUi, type Quality } from './ui';
+import { previewCapScale } from './settings';
 
 /**
  * The engine singleton. Lives outside React: it owns a canvas which the
@@ -25,9 +26,28 @@ export const engineError = engineErr;
 
 if (eng) eng.onInvalidate = () => requestRender();
 
+/** Called after every viewer render (e.g. the node-thumbnail scheduler). */
+export const afterRender = new Set<() => void>();
+
 let raf = 0;
+/** While true (video export owns the canvas), viewer renders are skipped. */
+let suspended = false;
+export function suspendRender(on: boolean) {
+  suspended = on;
+  if (on && raf) {
+    cancelAnimationFrame(raf);
+    raf = 0;
+  }
+}
+/** Render the viewer synchronously now (playback: exactly one render per timeline step). */
+export function renderImmediately() {
+  if (!eng || suspended) return;
+  if (raf) cancelAnimationFrame(raf);
+  raf = 0;
+  renderNow();
+}
 export function requestRender() {
-  if (raf || !eng) return;
+  if (raf || !eng || suspended) return;
   raf = requestAnimationFrame(() => {
     raf = 0;
     renderNow();
@@ -55,7 +75,9 @@ export function fitZoomFor(w: number, h: number) {
   return Math.max(0.01, Math.min((cw - m) / w, (ch - m) / h));
 }
 
-/** Nearest upstream core.image node of `target` in the flattened graph (or the first image). */
+const isSourceType = (t?: string) => t === IMAGE || t === 'core.raw' || t === 'core.video' || t === 'core.webcam';
+
+/** Nearest upstream core.image / core.raw node of `target` in the flattened graph (or the first image). */
 export function compareSource(graph: Graph, target: string): string | undefined {
   const flat = flattenGraph(graph);
   const byId = new Map(flat.nodes.map((n) => [n.id, n]));
@@ -69,12 +91,12 @@ export function compareSource(graph: Graph, target: string): string | undefined 
     for (const id of frontier) {
       if (seen.has(id)) continue;
       seen.add(id);
-      if (byId.get(id)?.type === IMAGE && id !== target) return id;
+      if (isSourceType(byId.get(id)?.type) && id !== target) return id;
       next.push(...(inc.get(id) ?? []));
     }
     frontier = next;
   }
-  return flat.nodes.find((n) => n.type === IMAGE)?.id;
+  return flat.nodes.find((n) => isSourceType(n.type))?.id;
 }
 
 function renderNow() {
@@ -96,7 +118,7 @@ function renderNow() {
     fh = ps.height;
   }
   const zoom = ui.fit ? fitZoomFor(fw, fh) : ui.zoom;
-  const scale = ui.quality === 'full' ? 1 : Math.min(1, quantize(Math.min(1, zoom) * QUALITY_FACTOR[ui.quality]));
+  const scale = Math.min(ui.quality === 'full' ? 1 : Math.min(1, quantize(Math.min(1, zoom) * QUALITY_FACTOR[ui.quality])), previewCapScale(fw, fh)); // cap: Preferences › Performance
   previewScale = scale;
 
   let res;
@@ -152,6 +174,7 @@ function renderNow() {
   if (JSON.stringify(errors) !== JSON.stringify(prev.errors)) patch.errors = errors;
   if (pending.join() !== prev.pending.join()) patch.pending = pending;
   useUi.setState(patch);
+  for (const fn of afterRender) fn();
 }
 
 const BG: [number, number, number] = [0.235, 0.235, 0.24];

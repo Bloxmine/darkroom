@@ -1,5 +1,8 @@
 import { uid } from './graph';
 import type { Asset } from './types';
+import { isRawFile, isRawStoreRef } from './raw/formats';
+import { loadRawAsset, rawAssetFromStore } from './raw/rawAsset';
+import { isVideoFile, isVideoMime, loadVideoAsset, videoAssetFromSerial } from './videoAssets';
 
 const readAsDataUrl = (blob: Blob) =>
   new Promise<string>((res, rej) => {
@@ -11,6 +14,8 @@ const readAsDataUrl = (blob: Blob) =>
 
 /** Load a File/Blob into an Asset (decodes images, reads text files). */
 export async function loadAsset(file: Blob, name = (file as File).name ?? 'file', id = uid('a')): Promise<Asset> {
+  if (isRawFile(name, file.type)) return loadRawAsset(file, name, id); // camera RAW: bytes → IndexedDB, see core/raw
+  if (isVideoFile({ type: file.type, name })) return loadVideoAsset(file, name, id); // video: bytes → IndexedDB, see core/videoAssets
   const mime = file.type || guessMime(name);
   const dataUrl = await readAsDataUrl(file);
   if (mime.startsWith('image/')) {
@@ -21,6 +26,8 @@ export async function loadAsset(file: Blob, name = (file as File).name ?? 'file'
 }
 
 export async function assetFromDataUrl(s: { id: string; name: string; mime: string; dataUrl: string }): Promise<Asset> {
+  if (isRawStoreRef(s.dataUrl)) return rawAssetFromStore(s);
+  if (isVideoMime(s.mime)) return videoAssetFromSerial(s);
   const blob = await (await fetch(s.dataUrl)).blob();
   return loadAsset(new Blob([blob], { type: s.mime }), s.name, s.id);
 }
