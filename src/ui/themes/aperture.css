@@ -1,0 +1,222 @@
+/* ==========================================================================
+   Theme: Aperture — dark graphite pro-app look after Apple Aperture 2/3
+   (Mac OS X Leopard / Snow Leopard). Structure lives in mac.css; this file
+   only sets tokens (the classic tokens plus the --m-* Mac tokens).
+   ========================================================================== */
+
+[data-theme='aperture'] {
+  color-scheme: dark;
+
+  /* classic tokens (used by the base rules that aren't overridden) */
+  --face: #333333;
+  --face-2: #3a3a3a;
+  --face-3: #424242;
+  --hi: #4a4a4a;
+  --lo: #1a1a1a;
+  --dk: #0d0d0d;
+  --line: #1a1a1a;
+  --text: #d0d0d0;
+  --muted: #8d8d8d;
+  --sel: #3a6fd2;
+  --sel-text: #ffffff;
+  --hover: rgba(255, 255, 255, 0.08);
+  --hover-border: transparent;
+  --field: #1d1d1d;
+  --error: #ff6e5f;
+  --title-grad: linear-gradient(#5a5a5a, #3a3a3a);
+
+  /* text */
+  --m-text: #d0d0d0;
+  --m-text-strong: #f2f2f2;
+  --m-text-dim: #8f8f8f;
+  --m-text-faint: #676767;
+  --m-link: #8ab4ff;
+  --m-hint: #f0b44a;
+  --m-section: #8a8a8a;
+
+  /* frame */
+  --m-window: #2b2b2b;
+  --m-gap: #121212;
+  --m-panel: #2d2d2d;
+  --m-line: #161616;
+  --m-hover: rgba(255, 255, 255, 0.09);
+  --m-disabled-icon: 0.32;
+
+  /* aqua selection */
+  --m-sel: linear-gradient(#6a9cea, #3d74d8 55%, #2d64c8);
+  --m-sel-flat: #4a86ec;
+  --m-sel-text: #ffffff;
+  --m-focus: rgba(84, 145, 240, 0.6);
+  --m-focus-border: #3b72d4;
+
+  /* menu bar */
+  --m-menubar: linear-gradient(#525252, #3c3c3c 50%, #333333 51%, #2c2c2c);
+  --m-menubar-border: #0b0b0b;
+  --m-menubar-hi: rgba(255, 255, 255, 0.16);
+  --m-menubar-text: #e4e4e4;
+  --m-menubar-shadow: 0 -1px 0 rgba(0, 0, 0, 0.7);
+
+  /* menus: dark translucent HUD */
+  --m-menu: rgba(36, 36, 36, 0.93);
+  --m-menu-border: rgba(0, 0, 0, 0.85);
+  --m-menu-shadow: 0 8px 26px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --m-menu-text: #e6e6e6;
+  --m-menu-dim: #707070;
+  --m-menu-keys: #9a9a9a;
+  --m-menu-sep: rgba(255, 255, 255, 0.1);
+  --m-menu-check: rgba(255, 255, 255, 0.12);
+
+  /* unified toolbar */
+  --m-bar: linear-gradient(#5b5b5b, #474747 45%, #3a3a3a 100%);
+  --m-bar-border: #0d0d0d;
+  --m-bar-hi: rgba(255, 255, 255, 0.2);
+  --m-bar-text: #dadada;
+  --m-bar-shadow: 0 -1px 0 rgba(0, 0, 0, 0.75);
+
+  /* segmented toolbar buttons (graphite gloss) */
+  --m-seg: linear-gradient(#5e5e5e, #4b4b4b 50%, #404040 51%, #474747);
+  --m-seg-hover: linear-gradient(#686868, #545454 50%, #494949 51%, #515151);
+  --m-seg-pressed: linear-gradient(#262626, #303030 50%, #2b2b2b 51%, #333333);
+  --m-seg-border: #141414;
+  --m-seg-hi: rgba(255, 255, 255, 0.17);
+  --m-seg-drop: rgba(255, 255, 255, 0.07);
+
+  /* panel headers & secondary bars */
+  --m-header: linear-gradient(#4d4d4d, #3c3c3c 50%, #353535 51%, #383838);
+  --m-header-border: #141414;
+  --m-header-hi: rgba(255, 255, 255, 0.13);
+  --m-header-text: #e2e2e2;
+  --m-header-strong: #ffffff;
+  --m-header-dim: #9a9a9a;
+  --m-subbar: linear-gradient(#3b3b3b, #323232);
+  --m-subbar-hi: rgba(255, 255, 255, 0.07);
+
+  /* fields */
+  --m-field: #1b1b1b;
+  --m-field-ro: #242424;
+  --m-field-text: #ececec;
+  --m-field-border: #0e0e0e;
+  --m-field-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.75), 0 1px 0 rgba(255, 255, 255, 0.08);
+  --m-option-bg: #2a2a2a;
+  --m-option-text: #e6e6e6;
+  --m-popup-arrows: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='10'%3E%3Cpath d='M3.5 0L7 4H0zM3.5 10L0 6h7z' fill='%23d8d8d8'/%3E%3C/svg%3E");
+
+  /* push buttons: graphite capsules, blue default */
+  --m-btn: linear-gradient(#636363, #4d4d4d 50%, #414141 51%, #4a4a4a);
+  --m-btn-active: linear-gradient(#2c2c2c, #383838 50%, #333333 51%, #3a3a3a);
+  --m-btn-border: #121212;
+  --m-btn-hi: rgba(255, 255, 255, 0.2);
+  --m-btn-drop: rgba(255, 255, 255, 0.07);
+  --m-btn-text: #ececec;
+  --m-btn-shadow: 0 -1px 0 rgba(0, 0, 0, 0.6);
+  --m-btn-default: linear-gradient(#8fbaf5, #5590e8 50%, #2f6ed8 51%, #4c8cec);
+  --m-btn-default-active: linear-gradient(#4a7fd0, #2f62c0 50%, #2856ae 51%, #3a6fcc);
+  --m-btn-default-border: #102c63;
+
+  /* sliders */
+  --m-slider-track: #161616;
+  --m-slider-fill: #4f86e6;
+  --m-knob: radial-gradient(circle at 50% 28%, #ffffff, #d8d8d8 45%, #9a9a9a);
+  --m-knob-border: #111111;
+
+  /* group boxes */
+  --m-group: rgba(0, 0, 0, 0.16);
+  --m-group-border: #1a1a1a;
+
+  /* library / lists */
+  --m-list: #262626;
+  --m-list-shadow: 0 -1px 0 rgba(0, 0, 0, 0.6);
+  --m-tri: #a8a8a8;
+  --m-badge: #4c4c4c;
+  --m-badge-text: #d6d6d6;
+  --m-info: rgba(0, 0, 0, 0.22);
+  --m-info-text: #b4b4b4;
+
+  /* inspector HUD sections */
+  --m-hud: rgba(22, 22, 22, 0.55);
+  --m-hud-border: rgba(0, 0, 0, 0.75);
+  --m-hud-hi: rgba(255, 255, 255, 0.05);
+  --m-hud-head: linear-gradient(rgba(255, 255, 255, 0.17), rgba(255, 255, 255, 0.06) 50%, rgba(255, 255, 255, 0.02) 51%, rgba(255, 255, 255, 0.05));
+  --m-hud-head-hi: rgba(255, 255, 255, 0.12);
+  --m-hud-head-text: #ececec;
+  --m-label: #a9a9a9;
+  --m-row-line: #333333;
+
+  /* HUD popups */
+  --m-hud-pop: rgba(26, 26, 26, 0.9);
+  --m-hud-pop-border: rgba(0, 0, 0, 0.9);
+  --m-hud-pop-text: #e2e2e2;
+  --m-hud-list: rgba(0, 0, 0, 0.3);
+  --m-hud-cat: rgba(44, 44, 44, 0.96);
+
+  /* node graph */
+  --m-graph: #232323;
+  --m-graph-text: #bdbdbd;
+  --m-graph-text-dim: #7a7a7a;
+  --m-graph-text-shadow: 0 1px 0 #000;
+  --m-node: linear-gradient(#424242, #333333 40%, #2c2c2c);
+  --m-node-border: #0a0a0a;
+  --m-node-shadow: 0 4px 12px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(255, 255, 255, 0.04);
+  --m-node-text: #e0e0e0;
+  --m-node-sub: #9b9b9b;
+  --m-node-subbg: rgba(0, 0, 0, 0.18);
+  --m-node-line: #1d1d1d;
+  --m-node-port: #c4c4c4;
+  --m-node-viewed: #e8e8e8;
+  --m-node-group: #5b5b5b;
+  --m-node-unknown-a: #4a2c2c;
+  --m-node-unknown-b: #3c2424;
+  --m-handle-border: #0b0b0b;
+  --m-edge: #9a9a9a;
+  --m-edge-mask: #6a9ad8;
+  --m-edge-bypass: #555555;
+
+  /* viewer & curves */
+  --m-viewer: #131313;
+  --m-curve-bg: #1a1a1a;
+  --m-curve-grid: #333333;
+
+  /* windows */
+  --m-backdrop: rgba(0, 0, 0, 0.32);
+  --m-backdrop-light: rgba(20, 20, 20, 0.75);
+  --m-dialog: #2f2f2f;
+  --m-dialog-border: #0a0a0a;
+  --m-title: linear-gradient(#5c5c5c, #454545 50%, #3b3b3b 51%, #3f3f3f);
+  --m-title-border: #0d0d0d;
+  --m-title-hi: rgba(255, 255, 255, 0.2);
+  --m-title-text: #e8e8e8;
+  --m-title-shadow: 0 -1px 0 rgba(0, 0, 0, 0.7);
+
+  /* status bar */
+  --m-status: linear-gradient(#3d3d3d, #2e2e2e);
+  --m-status-border: #0d0d0d;
+  --m-status-hi: rgba(255, 255, 255, 0.08);
+  --m-status-text: #a7a7a7;
+  --m-status-sep: rgba(255, 255, 255, 0.08);
+  --m-status-grip: rgba(255, 255, 255, 0.22);
+
+  /* scrollbars */
+  --m-scroll-track: rgba(0, 0, 0, 0.18);
+  --m-scroll-thumb: rgba(255, 255, 255, 0.24);
+  --m-scroll-thumb-hover: rgba(255, 255, 255, 0.36);
+}
+
+/* small dark-theme specifics that don't map onto a token */
+[data-theme='aperture'] {
+  & .dn-title {
+    color: #fff;
+  }
+  & .curve-line {
+    stroke: #eeeeee;
+  }
+  & .curve-pt {
+    fill: #1a1a1a;
+  }
+  & .cp-alpha,
+  & .cp-preview {
+    background: repeating-conic-gradient(#666 0 25%, #999 0 50%) 0 0 / 8px 8px;
+  }
+  & img.icon {
+    filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.35));
+  }
+}

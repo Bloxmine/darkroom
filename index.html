@@ -5,6 +5,22 @@
     <link rel="icon" type="image/png" href="/icons/fatcow/32x32/camera_lens.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Darkroom</title>
+    <script>
+      // Apply the saved UI theme before first paint (see src/store/settings.ts).
+      (function () {
+        var t = 'classic';
+        try {
+          var v = localStorage.getItem('darkroom.theme');
+          if (v === 'aperture' || v === 'aqua' || v === 'classic') t = v;
+        } catch (e) {}
+        document.documentElement.setAttribute('data-theme', t);
+      })();
+    </script>
+    <style>
+      html { background: #d4d0c8; }
+      html[data-theme='aperture'] { background: #2b2b2b; }
+      html[data-theme='aqua'] { background: #e3e3e3; }
+    </style>
   </head>
   <body>
     <div id="root"></div>

@@ -1,0 +1,204 @@
+/* ==========================================================================
+   Theme: Aqua — light Mac OS X Leopard look: unified grey toolbar, glossy
+   white capsules with blue Aqua default buttons, Lucida Grande.
+   Structure lives in mac.css; this file only sets tokens.
+   ========================================================================== */
+
+[data-theme='aqua'] {
+  color-scheme: light;
+
+  --face: #e8e8e8;
+  --face-2: #efefef;
+  --face-3: #f4f4f4;
+  --hi: #ffffff;
+  --lo: #9a9a9a;
+  --dk: #555555;
+  --line: #a5a5a5;
+  --text: #1a1a1a;
+  --muted: #6b6b6b;
+  --sel: #3875d7;
+  --sel-text: #ffffff;
+  --hover: rgba(0, 0, 0, 0.07);
+  --hover-border: transparent;
+  --field: #ffffff;
+  --error: #c62a1d;
+  --title-grad: linear-gradient(#e8e8e8, #bcbcbc);
+
+  --m-text: #1a1a1a;
+  --m-text-strong: #000000;
+  --m-text-dim: #6d6d6d;
+  --m-text-faint: #a0a0a0;
+  --m-link: #1e5bc6;
+  --m-hint: #a86400;
+  --m-section: #6f7885;
+
+  --m-window: #e8e8e8;
+  --m-gap: #8e8e8e;
+  --m-panel: #ececec;
+  --m-line: #a8a8a8;
+  --m-hover: rgba(0, 0, 0, 0.08);
+  --m-disabled-icon: 0.4;
+
+  --m-sel: linear-gradient(#6a9cea, #3d74d8 55%, #2d64c8);
+  --m-sel-flat: #3875d7;
+  --m-sel-text: #ffffff;
+  --m-focus: rgba(76, 140, 230, 0.55);
+  --m-focus-border: #5a8fd8;
+
+  --m-menubar: linear-gradient(#fbfbfb, #ececec 50%, #e0e0e0 51%, #d6d6d6);
+  --m-menubar-border: #8f8f8f;
+  --m-menubar-hi: rgba(255, 255, 255, 0.9);
+  --m-menubar-text: #000000;
+  --m-menubar-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+
+  --m-menu: rgba(247, 247, 247, 0.95);
+  --m-menu-border: rgba(0, 0, 0, 0.28);
+  --m-menu-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+  --m-menu-text: #000000;
+  --m-menu-dim: #a6a6a6;
+  --m-menu-keys: #444444;
+  --m-menu-sep: rgba(0, 0, 0, 0.12);
+  --m-menu-check: rgba(0, 0, 0, 0.08);
+
+  --m-bar: linear-gradient(#ececec, #d9d9d9 50%, #c4c4c4);
+  --m-bar-border: #7c7c7c;
+  --m-bar-hi: rgba(255, 255, 255, 0.85);
+  --m-bar-text: #222222;
+  --m-bar-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+
+  --m-seg: linear-gradient(#ffffff, #f3f3f3 50%, #e4e4e4 51%, #f0f0f0);
+  --m-seg-hover: linear-gradient(#ffffff, #f8f8f8 50%, #ececec 51%, #f6f6f6);
+  --m-seg-pressed: linear-gradient(#b8b8b8, #c8c8c8 50%, #bfbfbf 51%, #cdcdcd);
+  --m-seg-border: #868686;
+  --m-seg-hi: rgba(255, 255, 255, 0.95);
+  --m-seg-drop: rgba(255, 255, 255, 0.5);
+
+  --m-header: linear-gradient(#f2f2f2, #dedede 50%, #d4d4d4 51%, #d9d9d9);
+  --m-header-border: #9d9d9d;
+  --m-header-hi: rgba(255, 255, 255, 0.95);
+  --m-header-text: #222222;
+  --m-header-strong: #000000;
+  --m-header-dim: #666666;
+  --m-subbar: linear-gradient(#f4f4f4, #e3e3e3);
+  --m-subbar-hi: rgba(255, 255, 255, 0.9);
+
+  --m-field: #ffffff;
+  --m-field-ro: #f2f2f2;
+  --m-field-text: #000000;
+  --m-field-border: #8e8e8e;
+  --m-field-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.22);
+  --m-option-bg: #ffffff;
+  --m-option-text: #000000;
+  --m-popup-arrows: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='10'%3E%3Cpath d='M3.5 0L7 4H0zM3.5 10L0 6h7z' fill='%23333'/%3E%3C/svg%3E");
+
+  --m-btn: linear-gradient(#ffffff, #f4f4f4 50%, #e3e3e3 51%, #f2f2f2);
+  --m-btn-active: linear-gradient(#c9c9c9, #d6d6d6 50%, #cbcbcb 51%, #d8d8d8);
+  --m-btn-border: #8a8a8a;
+  --m-btn-hi: rgba(255, 255, 255, 0.95);
+  --m-btn-drop: rgba(255, 255, 255, 0.55);
+  --m-btn-text: #111111;
+  --m-btn-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+  --m-btn-default: linear-gradient(#cfe5fd, #8cc0f6 45%, #4c99ec 51%, #78b6f4 85%, #a9d4fa);
+  --m-btn-default-active: linear-gradient(#8fb8e8, #5a95db 50%, #3c7fd0 51%, #5c9ae0);
+  --m-btn-default-border: #3a63a3;
+  --m-btn-default-text: #000000;
+  --m-btn-default-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+
+  --m-slider-track: #d6d6d6;
+  --m-slider-fill: #5b93e6;
+  --m-knob: radial-gradient(circle at 50% 28%, #ffffff, #ececec 45%, #b5b5b5);
+  --m-knob-border: #7a7a7a;
+
+  --m-group: rgba(0, 0, 0, 0.04);
+  --m-group-border: #b8b8b8;
+
+  --m-list: #e1e7ef;
+  --m-list-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+  --m-tri: #6a6a6a;
+  --m-badge: #9aa5b5;
+  --m-badge-text: #ffffff;
+  --m-info: #f6f6f6;
+  --m-info-text: #3a3a3a;
+
+  --m-hud: #f7f7f7;
+  --m-hud-border: #b1b1b1;
+  --m-hud-hi: rgba(255, 255, 255, 0.9);
+  --m-hud-head: linear-gradient(#fbfbfb, #e9e9e9 50%, #dfdfdf 51%, #e6e6e6);
+  --m-hud-head-hi: rgba(255, 255, 255, 0.95);
+  --m-hud-head-text: #222222;
+  --m-label: #3c3c3c;
+  --m-row-line: #dddddd;
+
+  --m-hud-pop: rgba(246, 246, 246, 0.94);
+  --m-hud-pop-border: rgba(0, 0, 0, 0.3);
+  --m-hud-pop-text: #111111;
+  --m-hud-list: #ffffff;
+  --m-hud-cat: rgba(232, 236, 242, 0.97);
+
+  --m-graph: #b4b8be;
+  --m-graph-text: #2e2e2e;
+  --m-graph-text-dim: #555555;
+  --m-graph-text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+  --m-node: linear-gradient(#ffffff, #f0f0f0 40%, #e3e3e3);
+  --m-node-border: #6a6a6a;
+  --m-node-shadow: 0 3px 9px rgba(0, 0, 0, 0.28);
+  --m-node-text: #111111;
+  --m-node-sub: #555555;
+  --m-node-subbg: rgba(0, 0, 0, 0.04);
+  --m-node-line: #cfcfcf;
+  --m-node-port: #2c2c2c;
+  --m-node-viewed: #ffffff;
+  --m-node-group: #8f8f8f;
+  --m-node-unknown-a: #f0d6d6;
+  --m-node-unknown-b: #e4c4c4;
+  --m-handle-border: #3a3a3a;
+  --m-edge: #3e3e3e;
+  --m-edge-mask: #2f5f9e;
+  --m-edge-bypass: #8a8a8a;
+
+  --m-viewer: #3c3c3d;
+  --m-curve-bg: #2b2b2b;
+  --m-curve-grid: #444444;
+
+  --m-backdrop: rgba(0, 0, 0, 0.18);
+  --m-backdrop-light: rgba(232, 232, 232, 0.7);
+  --m-dialog: #ececec;
+  --m-dialog-border: #7a7a7a;
+  --m-title: linear-gradient(#ececec, #d9d9d9 50%, #cdcdcd);
+  --m-title-border: #8f8f8f;
+  --m-title-hi: rgba(255, 255, 255, 0.9);
+  --m-title-text: #2a2a2a;
+  --m-title-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+
+  --m-status: linear-gradient(#d4d4d4, #b7b7b7);
+  --m-status-border: #7c7c7c;
+  --m-status-hi: rgba(255, 255, 255, 0.6);
+  --m-status-text: #333333;
+  --m-status-sep: rgba(0, 0, 0, 0.14);
+  --m-status-grip: rgba(0, 0, 0, 0.3);
+
+  --m-scroll-track: rgba(0, 0, 0, 0.04);
+  --m-scroll-thumb: rgba(0, 0, 0, 0.3);
+  --m-scroll-thumb-hover: rgba(0, 0, 0, 0.45);
+}
+
+[data-theme='aqua'] {
+  & .dn-title {
+    color: #fff;
+  }
+  & .curve-line {
+    stroke: #eeeeee;
+  }
+  & .curve-pt {
+    fill: #2b2b2b;
+  }
+  /* Aqua scroller thumbs were glossy blue capsules */
+  & ::-webkit-scrollbar-thumb {
+    background: linear-gradient(90deg, #7fb0f0, #3d82e0 50%, #6aa4ee);
+    background-clip: padding-box;
+  }
+  & ::-webkit-scrollbar-thumb:horizontal {
+    background: linear-gradient(#7fb0f0, #3d82e0 50%, #6aa4ee);
+    background-clip: padding-box;
+  }
+}
