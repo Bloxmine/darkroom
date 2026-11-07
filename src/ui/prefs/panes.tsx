@@ -595,6 +595,9 @@ export function PluginsPane({ ask }: PaneProps) {
         <Check checked={s.aiPreferWebGPU} onChange={S('aiPreferWebGPU')}>
           Prefer WebGPU for AI
         </Check>
+        <Check checked={s.aiFollowZoom} onChange={S('aiFollowZoom')}>
+          Re-run AI nodes when zooming in
+        </Check>
         <span className="grow" />
         <Note>{entries.length ? `${entries.length} files, ${fmtBytes(total)}` : ''}</Note>
         <Button disabled={!sel} onClick={() => sel && void deleteCached(sel).then(() => (setSel(null), refresh()))}>

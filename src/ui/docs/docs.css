@@ -1,0 +1,224 @@
+/* Darkroom Help — floating documentation window. Theme tokens only (classic / aperture / aqua). */
+.docs-win {
+  position: fixed;
+  z-index: 1600; /* above modal dialogs, so it can sit on top of the Plugin Manager */
+  top: 7vh;
+  left: calc(50vw - min(470px, 46vw));
+  width: min(940px, 92vw);
+  height: min(680px, 84vh);
+  min-width: 520px;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  resize: both;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+}
+.docs-win .titlebar {
+  cursor: default;
+  flex: none;
+}
+.docs-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px;
+  border-bottom: 1px solid var(--line);
+  background: var(--face);
+}
+.docs-toolbar .btn {
+  min-width: 26px;
+  padding: 2px 5px;
+}
+.docs-toolbar .grow {
+  flex: 1;
+}
+.docs-search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border: 1px solid var(--lo);
+  border-radius: 10px;
+  background: var(--field);
+}
+.docs-search input {
+  width: 200px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+}
+.docs-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.docs-side {
+  flex: none;
+  width: 205px;
+  overflow: auto;
+  padding: 6px 0;
+  border-right: 1px solid var(--line);
+  background: var(--face-2);
+}
+.docs-doc,
+.docs-toc-item,
+.docs-hit {
+  display: flex;
+  width: 100%;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+.docs-doc {
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-weight: bold;
+}
+.docs-doc.active {
+  background: var(--sel);
+  color: var(--sel-text);
+}
+.docs-toc {
+  padding: 2px 0 6px;
+}
+.docs-toc-item {
+  display: block;
+  padding: 2px 10px 2px 30px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--muted);
+}
+.docs-toc-item.d3 {
+  padding-left: 42px;
+}
+.docs-toc-item:hover,
+.docs-doc:not(.active):hover,
+.docs-hit:hover {
+  background: var(--hover);
+}
+.docs-toc-item.active {
+  color: var(--text);
+  font-weight: bold;
+}
+
+/* the page */
+.docs-article {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 18px 28px 40px;
+  background: var(--field);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.55;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.docs-article h1,
+.docs-article h2,
+.docs-article h3,
+.docs-article h4 {
+  line-height: 1.25;
+  margin: 1.4em 0 0.5em;
+  scroll-margin-top: 10px;
+}
+.docs-article h1 {
+  font-size: 22px;
+  margin-top: 0.2em;
+}
+.docs-article h2 {
+  font-size: 17px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+.docs-article h3 {
+  font-size: 14px;
+}
+.docs-article a {
+  color: var(--sel);
+  cursor: pointer;
+}
+.docs-article code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--face-2);
+}
+.docs-article pre {
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--face-2);
+}
+.docs-article pre code {
+  padding: 0;
+  background: none;
+}
+.docs-article table {
+  border-collapse: collapse;
+  margin: 0.8em 0;
+  font-size: 12px;
+}
+.docs-article th,
+.docs-article td {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  vertical-align: top;
+}
+.docs-article th {
+  background: var(--face-2);
+}
+.docs-article img {
+  max-width: 100%;
+  height: auto;
+}
+.docs-article blockquote {
+  margin: 0.8em 0;
+  padding: 2px 12px;
+  border-left: 3px solid var(--sel);
+  color: var(--muted);
+}
+.docs-article kbd {
+  padding: 0 4px;
+  border: 1px solid var(--lo);
+  border-radius: 3px;
+  background: var(--face);
+}
+.docs-article hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.docs-loading,
+.docs-error {
+  color: var(--muted);
+}
+.docs-error {
+  color: var(--error);
+}
+
+/* search results */
+.docs-results h2 {
+  margin-top: 0;
+}
+.docs-hit {
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.docs-hit-where {
+  font-weight: bold;
+}
+.docs-hit-snippet {
+  color: var(--muted);
+}

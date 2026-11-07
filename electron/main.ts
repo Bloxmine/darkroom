@@ -242,6 +242,8 @@ function createWindow() {
     if (/^https?:/i.test(url)) void shell.openExternal(url);
   });
   wc.setWindowOpenHandler(({ url }) => {
+    // the app's own pages (e.g. the render harness from Preferences › Advanced) open in a child window
+    if (ours(url) && !/\.md(#|$)/i.test(url)) return { action: 'allow', overrideBrowserWindowOptions: { width: 1100, height: 760, backgroundColor: '#1d1e21' } };
     if (/^https?:/i.test(url)) void shell.openExternal(url);
     return { action: 'deny' };
   });

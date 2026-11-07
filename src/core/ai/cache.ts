@@ -20,7 +20,9 @@ async function openCache(): Promise<Cache | null> {
 
 /** Fetch `url` as an ArrayBuffer, from the cache when present; stores a fresh download in the cache. */
 export async function fetchCached(url: string, onProgress?: Progress, expectedBytes = 0): Promise<{ buffer: ArrayBuffer; fromCache: boolean }> {
-  const cache = await openCache();
+  // Cache Storage only accepts http(s) keys. Files bundled with the Mac app (app://) are local anyway.
+  const cacheable = /^https?:/i.test(new URL(url, location.href).protocol);
+  const cache = cacheable ? await openCache() : undefined;
   const hit = await cache?.match(url).catch(() => undefined);
   if (hit) {
     const buffer = await hit.arrayBuffer();

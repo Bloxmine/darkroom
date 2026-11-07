@@ -21,7 +21,9 @@ scripts/make-icns.mjs        build/icon.icns from docs/media/logo.svg (sips + ic
 | Command | What it does |
 |---|---|
 | `pnpm electron:dev` | Starts the Vite dev server, compiles `electron/`, launches Electron at the dev server (`DARKROOM_DEV_URL`). Renderer: HMR. `electron/*.ts` changes: rebuild + restart. Closing the app stops the dev server. |
-| `pnpm electron:build` | `tsc -b` → `vite build --mode electron --outDir dist-app` → compile `electron/` → `electron-builder --mac`. Output: `release/Darkroom-<version>-<arch>.dmg` and `release/mac-<arch>/Darkroom.app` (host arch). |
+| `pnpm electron:build` | `tsc -b` → `vite build --mode electron --outDir dist-app` → compile `electron/` → `electron-builder --mac --universal`. Output: `release/Darkroom-<version>-universal.dmg` + `.zip` and `release/mac-universal/Darkroom.app` (arm64 + x86_64). Works on either host arch. |
+| `pnpm electron:build:arm64` | Same, Apple silicon only: `release/Darkroom-<version>-arm64.dmg` + `.zip`, `release/mac-arm64/Darkroom.app`. |
+| `pnpm electron:build:x64` | Same, Intel only: `release/Darkroom-<version>-x64.dmg` + `.zip`, `release/mac/Darkroom.app` (electron-builder's x64 folder has no suffix). |
 | `pnpm electron:compile` | Only compile `electron/` into `dist-electron/`. |
 | `pnpm electron:icon` | Regenerate `build/icon.icns` (+ `build/icon.png`). |
 
@@ -33,6 +35,37 @@ electron-builder config lives in `package.json` → `build`: appId `io.bloxmine.
 `public.app-category.photography`, `identity: null` (unsigned), only `dist-app/`, `dist-electron/` and
 `package.json` are packed (`!node_modules`: everything the renderer needs is bundled by Vite; the main
 process has no runtime dependencies).
+
+### Universal binary and macOS version
+
+`build.mac.target` is `dmg` + `zip`, both `arch: ["universal"]`. The zip isn't needed to install,
+but it's the format electron-updater uses on macOS, so it's there for future auto-update. Artifacts
+are named `${productName}-${version}-${arch}.${ext}` (`Darkroom-0.1.0-universal.dmg`). The single-arch
+scripts name the targets on the command line (`--mac dmg zip --arm64`). With only `--arm64`,
+electron-builder would build the configured universal targets as well.
+
+electron-builder packs an x64 and an arm64 app and merges them with `@electron/universal`: every
+Mach-O file is `lipo`-merged (the main executable, Electron Framework, the four helpers (plain, GPU,
+Renderer, Plugin), and the dylibs: 14 files, all `x86_64 arm64`). The app has **no native node
+modules**: onnxruntime-web, libraw-wasm and mediabunny are WASM/JS and bundled by Vite, there are no
+`.node` files and no `app.asar.unpacked`. So both `app.asar`s are identical. `mergeASARs: true` is set
+anyway, so if a native module is ever added, the merge goes through `@electron/universal`'s asar merge
+instead of failing. Such a module would also need `x64ArchFiles`/`singleArchFiles` (or a prebuilt
+universal binary). Check with:
+
+```bash
+lipo -archs "release/mac-universal/Darkroom.app/Contents/MacOS/Darkroom"   # x86_64 arm64
+find release/mac-universal/Darkroom.app -name '*.node'                     # (nothing)
+```
+
+`minimumSystemVersion: "13.0"` (`LSMinimumSystemVersion`): Electron 45 (Chromium 156) supports macOS
+13 Ventura and later. That's what the Electron README says, what Electron's own `Info.plist` declares,
+and what the binaries are linked for (`otool -l` → `LC_BUILD_VERSION minos 13.0`). Older macOS won't
+launch it.
+
+Sizes (0.1.0): universal dmg ≈ 245 MB (zip ≈ 238 MB), arm64 dmg ≈ 143 MB, x64 dmg ≈ 147 MB. The
+universal build is about 1.7× an arm64-only one because Electron Framework is carried twice. The
+web app itself (`app.asar`) is shared.
 
 If your shell has `ELECTRON_RUN_AS_NODE=1` set (some editors built on Electron export it), Electron
 starts as plain Node. `electron:dev` strips it; unset it yourself when launching the app binary directly.
@@ -164,8 +197,22 @@ launch's window background.
 ## Tests
 
 The packaged app can be driven with Playwright's `_electron.launch({ executablePath:
-'release/mac-arm64/Darkroom.app/Contents/MacOS/Darkroom', colorScheme: null })`. `colorScheme: null` is
-needed, or Playwright forces `prefers-color-scheme: light`. Test hooks in main:
+'release/mac-universal/Darkroom.app/Contents/MacOS/Darkroom', colorScheme: null })`. `colorScheme: null` is
+needed, or Playwright forces `prefers-color-scheme: light`.
+
+To test the Intel slice on Apple silicon (needs Rosetta 2), point `executablePath` at a wrapper script:
+
+```sh
+#!/bin/sh
+exec /usr/bin/arch -x86_64 "/path/to/release/mac-universal/Darkroom.app/Contents/MacOS/Darkroom" "$@"
+```
+
+The main process then reports `process.arch === 'x64'` and `app.runningUnderARM64Translation === true`.
+The GPU, utility and renderer helpers are translated too. WebGL2 runs through ANGLE/Metal as on native.
+Under Rosetta, the first project load is noticeably slower (≈19 s vs ≈1.5 s native on an M2 Pro, first
+launch including translation), so tests should poll instead of using fixed sleeps.
+
+Test hooks in main:
 
 - `DARKROOM_TEST_DIALOG_PATH=<path>[:<path>…]` answers every open/save dialog without showing it.
   It's read on each call, so a test can change it with `electronApp.evaluate(() => process.env.… = …)`.
@@ -179,6 +226,8 @@ needed, or Playwright forces `prefers-color-scheme: light`. Test hooks in main:
 - No auto-update (electron-updater isn't wired up).
 - Closing the window doesn't ask about unsaved changes. The project is autosaved and restored on next
   launch, as in the browser.
+- The universal app is tested on Apple silicon, natively and as x86_64 under Rosetta 2. It hasn't
+  been run on a real Intel Mac, so Intel-GPU WebGL2 behaviour is untested.
 - Only the macOS build is configured. The shell is mostly platform-neutral, but Windows/Linux targets,
   their menu-bar handling (the in-app menu bar is hidden only on macOS) and icons aren't set up.
 - Single-key shortcuts aren't shown next to native menu items (macOS would treat them as global key

@@ -48,6 +48,24 @@ trip. You can open any preset and take it apart.
   locally with ONNX Runtime Web (WebGPU, or WASM on the CPU). They drive a depth-aware tilt-shift,
   real 3D anaglyphs, depth fog and portrait bokeh. Models download once and then work offline. See
   [docs/AI.md](docs/AI.md).
+- **Click to select, scene segmentation and relighting.** Select a node with a viewer tool and work
+  in the viewer: click objects to select them (Segment Anything: SlimSAM), paint masks with a brush,
+  or drag a light. Scene Segmentation (DETR panoptic) finds sky, people, vegetation, water, buildings…
+  for sky swaps; Relight adds a virtual lamp with shadows from an AI depth map.
+- **AI restoration and creative filters.** Upscale 2×/4× (Real-ESRGAN, tiled), Remove Object (LaMa
+  inpainting, from any mask), Colorize B&W (DDColor), Neural Style (fast neural style), Low-Light
+  Enhance (Zero-DCE) and AI Line Art (Informative Drawings), plus presets such as *Restore Old Photo*
+  (scratch removal → colorize → upscale) and *Night Rescue*. All run locally; see [docs/AI.md](docs/AI.md).
+- **AI denoise and sky replacement.** AI Denoise (SCUNet, tiled, separate luma/colour amounts and detail
+  recovery) cleans high-ISO noise. Sky Mask (a dedicated sky network plus guided-filter matting for
+  branches and hair) also gives a horizon gradient for graduated filters. Sky Replace swaps in any image
+  or a procedural sunset, blue, overcast, night or stormy sky, relights the foreground and defringes edges.
+- **AI for people.** Face Detection & Landmarks (478-point mesh: face, skin, eye, lip and brow masks,
+  even for the small faces of group photos), Face Restoration (RestoreFormer++ or GFPGAN), Pose / Body
+  (skeleton, person, hair, skin and clothes masks) and Smart Auto-Crop (keeps faces whole, with
+  headroom and rule-of-thirds placement), plus *Beauty Retouch*, *Hair Recolor*, *Restore Portrait*,
+  *Motion Capture* and *Instagram Crop 4:5* presets. Runs locally; see [docs/AI.md](docs/AI.md).
+  Presets: *Sunset Sky*, *Dramatic Sky*, *Clean High ISO*, *Graduated Filter*.
 - **Themes that follow your system.** *Auto* (the default) uses *Aperture* (dark graphite Aqua) in
   Dark Mode and *Aqua* (light Leopard) in Light Mode. *Classic* (a 2000s Windows pro tool) is also available.
 - **Snow Leopard–style Preferences** (<kbd>⌘</kbd>+<kbd>,</kbd>) with eight panes: General, Appearance,
@@ -162,19 +180,24 @@ document with the unsaved-changes dot, and `.darkroom` projects and images (JPEG
 camera RAW) open from Finder or by dropping them on the Dock icon. It follows the system light/dark
 appearance like the web version, and works fully offline.
 
-**Install:** open `Darkroom-<version>-arm64.dmg` and drag Darkroom to Applications. The app is not
+**Requirements:** macOS 13 Ventura or later, on Apple silicon or Intel. The download is one universal
+app that runs natively on both.
+
+**Install:** open `Darkroom-<version>-universal.dmg` and drag Darkroom to Applications. The app is not
 signed or notarized, so the first time macOS Gatekeeper will refuse to open it. **Right-click (or
 Control-click) Darkroom in Applications → Open → Open.** After that it opens normally. (On recent
 macOS versions you may instead need *System Settings → Privacy & Security → Open Anyway*. Or remove
 the quarantine flag with `xattr -dr com.apple.quarantine /Applications/Darkroom.app`.)
 
-**Build it yourself** (on a Mac; builds for the host architecture):
+**Build it yourself** (on a Mac, either architecture):
 
 ```bash
 pnpm install
-pnpm electron:build   # → release/Darkroom-<version>-<arch>.dmg and release/mac-<arch>/Darkroom.app
-pnpm electron:dev     # Vite dev server + Electron with live reload (main/preload rebuild + restart)
-pnpm electron:icon    # regenerate build/icon.icns from docs/media/logo.svg
+pnpm electron:build         # universal (arm64 + x86_64) → release/Darkroom-<version>-universal.dmg/.zip
+pnpm electron:build:arm64   # Apple silicon only → release/Darkroom-<version>-arm64.dmg/.zip
+pnpm electron:build:x64     # Intel only → release/Darkroom-<version>-x64.dmg/.zip
+pnpm electron:dev           # Vite dev server + Electron with live reload (main/preload rebuild + restart)
+pnpm electron:icon          # regenerate build/icon.icns from docs/media/logo.svg
 ```
 
 Architecture, IPC surface and security choices: [docs/DESKTOP.md](docs/DESKTOP.md).
@@ -187,7 +210,7 @@ Architecture, IPC surface and security choices: [docs/DESKTOP.md](docs/DESKTOP.m
 | **Color** | Levels, Curves, HSL, White Balance, Exposure, Color Balance, Channel Mixer, Gradient Map, 3D LUT (`.cube`), Auto Levels, Histogram Equalize, Clarity, Dehaze, Highlights/Shadows, Selective Color, Split Toning, Black & White mixer, Match Color, False Color, Gamut Warning |
 | **Filter** | Gaussian/Box/Directional/Lens Blur, Sharpen, High Pass, Denoise, Surface Blur, Bilateral, Median, Min/Max, Glow, Edge Detect, Frequency Separation |
 | **Transform & Distort** | Crop, Resize (Lanczos/bicubic/area), Rotate 90, Flip, Canvas Size, Straighten, Perspective, Tile, Lens Distortion, Chromatic Aberration, Displace, Pixelate, Downsample, Wave, Mirror, Polar |
-| **Mask** | Color Range, Luma Range, Shape, Linear/Radial Gradient, Edges, Blur, Combine, Invert, Levels, Mask View |
+| **Mask** | Paint Mask (brush in the viewer), Color Range, Luma Range, Shape, Linear/Radial Gradient, Edges, Blur, Combine, Invert, Levels, Mask View |
 | **Composite & Math** | Blend (18 modes), Mix, Layer Stack, Alpha Over, Drop Shadow, Border, Math Op, Remap, GLSL Expression |
 | **Analog** | CCD Sensor, CCD Smear, Purple Fringing, Sensor Resolution, In-camera Sharpening, Direct Flash, Cheap Lens, Film Stock, Date Stamp, VHS Signal/Tracking/Noise, VCR OSD, Instant Frame, Thermal Camera, Digital Glitch |
 | **Stylize** | Film Grain, Vignette, Bloom, Halation, Light Leak, Posterize, Dither, Halftone, Scanlines, JPEG artefacts (real DCT), CRT |
@@ -197,7 +220,7 @@ Architecture, IPC surface and security choices: [docs/DESKTOP.md](docs/DESKTOP.m
 | **Optical** | Tilt-Shift, Zoom Blur, Radial Blur, Lens Flare, God Rays, Anaglyph 3D, Kaleidoscope |
 | **Retro** | Palette Quantize (NES, PICO-8, C64, EGA, CGA, Mac Plus, Apple II, ZX Spectrum…), Error Diffusion (Atkinson, Floyd–Steinberg, JJN, Sierra), LCD subpixels |
 | **Utility** | Output, Reroute, Info, Split Compare, Channel View, Histogram Overlay, GLSL Shader |
-| **AI** | Depth Map, Subject Mask, Depth Fog (models run in the browser, see [docs/AI.md](docs/AI.md)) |
+| **AI** | Depth Map, Subject Mask, Depth Fog, Click Select (SAM), Scene Segmentation, Relight, AI Upscale, Remove Object (LaMa), Colorize B&W, Neural Style, Low-Light Enhance, AI Line Art, AI Denoise, Sky Mask, Sky Replace, Face Detection & Landmarks, Face Restoration, Pose / Body, Smart Auto-Crop (models run in the browser, see [docs/AI.md](docs/AI.md)) |
 
 ## Custom nodes & plugins
 
@@ -288,6 +311,25 @@ node scripts/snap.mjs out.png 'node=effects.kuwahara&params={"radius":8}'
   [MODNet](https://huggingface.co/Xenova/modnet) (Ke et al.) and
   [U²-Net-p](https://huggingface.co/BritishWerewolf/U-2-Netp) (Qin et al., via rembg). They run with
   [ONNX Runtime Web](https://onnxruntime.ai) (MIT). Details in [docs/AI.md](docs/AI.md).
+- Image-to-image models: [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) x4v3 / anime 6B (Wang et al., BSD-3-Clause),
+  [LaMa](https://github.com/advimman/lama) (Suvorov et al., Apache-2.0; ONNX by Carve / OpenCV zoo),
+  [DDColor](https://github.com/piddnad/DDColor) tiny (Kang et al., Apache-2.0),
+  fast neural style (Johnson et al.; [pytorch/examples](https://github.com/pytorch/examples), BSD-3-Clause, via the ONNX Model Zoo),
+  Zero-DCE (Guo et al.; [Keras example](https://huggingface.co/keras-io/low-light-image-enhancement), Apache-2.0) and
+  [Informative Drawings](https://github.com/carolineec/informative-drawings) (Chan et al., MIT).
+- Selection models (Apache-2.0): [SlimSAM-77](https://huggingface.co/Xenova/slimsam-77-uniform) (Chen et al.,
+  pruned from Segment Anything by Kirillov et al.) and
+  [DETR ResNet-50 panoptic](https://huggingface.co/Xenova/detr-resnet-50-panoptic) (Carion et al.), ONNX exports by Xenova.
+- Denoise and sky models: [SCUNet](https://github.com/cszn/SCUNet) real-world PSNR/GAN (Zhang et al., Apache-2.0;
+  [ONNX by Heliosoph](https://huggingface.co/Heliosoph/scunet-onnx)) and the SkySeg U²-Net from
+  [xiongzhu666/Sky-Segmentation-and-Post-processing](https://github.com/xiongzhu666/Sky-Segmentation-and-Post-processing)
+  (MIT; [fp16 ONNX by voyagerfromeast](https://huggingface.co/voyagerfromeast/skyseg)).
+- People models: [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe) 0.10.35 with the Face Landmarker,
+  Pose Landmarker and Selfie Multiclass models (Google, Apache-2.0),
+  [YuNet](https://huggingface.co/opencv/face_detection_yunet) (Wu et al., OpenCV Zoo, MIT),
+  [RestoreFormer++](https://github.com/wzhouxiff/RestoreFormerPlusPlus) (Wang et al., Apache-2.0;
+  [web ONNX by Saimon8420](https://huggingface.co/Saimon8420/restoreformer-pp-web)) and
+  [GFPGAN v1.4](https://github.com/TencentARC/GFPGAN) (Wang et al., Apache-2.0).
 - RAW decoding: [LibRaw](https://www.libraw.org) (LGPL-2.1 / CDDL) via
   [libraw-wasm](https://github.com/ybouane/LibRaw-Wasm) (ISC). ZIP writing: [fflate](https://github.com/101arrowz/fflate) (MIT).
 - Built with [React](https://react.dev), [React Flow](https://reactflow.dev),

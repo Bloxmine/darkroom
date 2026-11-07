@@ -44,6 +44,8 @@ export interface AiState {
   running: number;
   /** Cached URL → bytes (refreshed by refreshCached()). */
   cached: Record<string, number>;
+  /** Long-running node work with progress (e.g. tiled upscaling), shown in the progress toast. */
+  tasks?: Record<string, { label: string; done: number; total: number }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,6 +74,15 @@ export function subscribeAi(fn: () => void) {
   return () => void listeners.delete(fn);
 }
 const setModel = (id: string, patch: Partial<ModelState>) => set((s) => ({ models: { ...s.models, [id]: { ...(s.models[id] ?? { status: 'idle' }), ...patch } } }));
+/** Show (or with null, clear) progress of a long-running AI task in the progress toast. */
+export function setAiTask(id: string, task: { label: string; done: number; total: number } | null) {
+  set((s) => {
+    const tasks = { ...s.tasks };
+    if (task) tasks[id] = task;
+    else delete tasks[id];
+    return { tasks };
+  });
+}
 const setDownload = (url: string, patch: Partial<DownloadState>) =>
   set((s) => ({ downloads: { ...s.downloads, [url]: { ...(s.downloads[url] ?? { label: url, url, loaded: 0, total: 0, done: false }), ...patch } } }));
 
@@ -81,7 +92,8 @@ function post(msg: string, kind: 'info' | 'error' = 'info') {
   ui?.setState({ message: msg, messageKind: kind });
 }
 
-async function download(label: string, url: string, expected = 0) {
+/** Cache-first download with progress in the AI toast / AI Models panel (also used by the MediaPipe runtime). */
+export async function download(label: string, url: string, expected = 0) {
   setDownload(url, { label, loaded: 0, total: expected, done: false, error: undefined });
   let last = 0;
   try {
@@ -222,7 +234,8 @@ async function loadModel(id: string): Promise<Loaded> {
   const be = await getBackend();
   const tryFile = async (file: ModelFile): Promise<Loaded> => {
     setModel(id, { status: 'downloading', precision: file.precision, error: undefined });
-    const buf = await download(`${model.name} (${file.precision})`, file.url, file.bytes);
+    const raw = await download(`${model.name} (${file.precision})`, file.url, file.bytes);
+    const buf = model.prepare ? await model.prepare(raw) : raw;
     setModel(id, { status: 'loading' });
     const key = `${id}:${file.precision}`;
     const info = await be.call<LoadResult>({ type: 'load', key, model: buf, ep: model.wasmOnly ? 'wasm' : undefined }, [buf]);
@@ -271,6 +284,28 @@ export async function runModel(id: string, input: TensorData, opts: { output?: s
   }
 }
 
+/**
+ * Run a model with several named inputs (int64 allowed via TensorData.type) and get several named
+ * outputs back (default: all of the model's outputs). Input buffers are transferred: pass copies of
+ * anything you keep (e.g. cached embeddings).
+ */
+export async function runModelMulti(id: string, inputs: Record<string, TensorData>, outputs?: string[]): Promise<Record<string, TensorData>> {
+  const m = await ensureModel(id);
+  const be = await getBackend();
+  const names = outputs ?? m.info.outputs;
+  set((s) => ({ running: s.running + 1 }));
+  try {
+    const r = await be.call<RunResult>({ type: 'run', key: m.key, inputs, outputs: names }, Object.values(inputs).map((t) => t.data.buffer));
+    const first = Object.values(inputs)[0];
+    const size = first ? first.dims.slice(-2).reverse().join('×') : '';
+    setModel(id, { lastInferMs: Math.round(r.ms), lastSize: size, ep: r.ep });
+    console.info(`[darkroom ai] ${id} ${m.file.precision} on ${r.ep}${be.worker ? ' (worker)' : ' (main thread)'}: ${r.ms.toFixed(0)} ms`);
+    return r.extra ?? {};
+  } finally {
+    set((s) => ({ running: s.running - 1 }));
+  }
+}
+
 // ---------------------------------------------------------------------------
 // management (AI Models dialog)
 // ---------------------------------------------------------------------------
@@ -303,9 +338,13 @@ export async function clearModelCache(url?: string) {
 }
 
 /** Download a model ahead of time (no inference). */
-export const prefetchModel = (id: string) => ensureModel(id).then(() => refreshCached());
+export const prefetchModel = (id: string) => {
+  const m = MODELS[id];
+  const f = m?.files[0];
+  return (m?.external && f ? download(`${m.name}`, f.url, f.bytes) : ensureModel(id)).then(() => refreshCached());
+};
 
 export const ORT_WASM_URLS = { jsep: jsepWasmUrl, cpu: cpuWasmUrl };
 
 /** Debug/automation handle (used by the render harness tooling and benchmarks). */
-(globalThis as Record<string, unknown>).__darkroomAi = { getState: getAiState, setEpPreference, clearModelCache, prefetchModel, runModel };
+(globalThis as Record<string, unknown>).__darkroomAi = { getState: getAiState, setEpPreference, clearModelCache, prefetchModel, runModel, runModelMulti };

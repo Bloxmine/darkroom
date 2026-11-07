@@ -14,6 +14,12 @@ export interface RenderOptions {
   /** Max long edge for preview; overrides `scale` if given. */
   maxSize?: number;
   /**
+   * Interactive preview only: evaluate heavy nodes (NodeDef.heavy, default all `ai.*`) at this fixed
+   * scale in a separate cache and resample their outputs to `scale`. Zooming the viewer then never
+   * re-runs AI inference. Omit for exports (heavy nodes then run at `scale`, i.e. full resolution).
+   */
+  heavyScale?: number;
+  /**
    * Render into a separate cache namespace (e.g. 'thumb' for node thumbnails)
    * so renders at another scale don't evict the viewer's per-node cache.
    * Tagged renders reuse the main namespace's finished CPU textures (decoded images).
@@ -207,7 +213,10 @@ export class Engine {
       const node = nodes.get(id)!;
       let res: CacheEntry | null = null;
       try {
-        res = this.evalNode(node, incoming.get(id) ?? new Map(), (src) => (nodes.has(src) ? evalNode(src) : null), scale, projectSize);
+        const hs = opts.heavyScale;
+        const def = hs !== undefined && Math.abs(scale - hs) > 1e-6 && !node.bypass ? getNodeDef(node.type) : undefined;
+        if (def && (def.heavy ?? def.id.startsWith('ai.'))) res = this.evalHeavyProxy(graph, node, scale, hs!);
+        else res = this.evalNode(node, incoming.get(id) ?? new Map(), (src) => (nodes.has(src) ? evalNode(src) : null), scale, projectSize);
         if (res && this.errors.get(id)?.startsWith('[pending]')) this.errors.delete(id); // keep the marker while async cpu() is pending (renderReady / ui.pending rely on it)
       } catch (e) {
         this.errors.set(id, e instanceof ShaderCompileError ? e.log : String((e as Error)?.message ?? e));
@@ -529,6 +538,39 @@ export class Engine {
   // Cache namespaces + node thumbnails
   // ---------------------------------------------------------------------------
 
+  /**
+   * A heavy node in the interactive viewer: evaluate it (and its upstream) once at `heavyScale` in the
+   * 'heavy' cache namespace, then resample its outputs to the current `scale`. Changing the zoom only
+   * costs a blit; the inference re-runs only when the node's inputs or params change.
+   */
+  private evalHeavyProxy(graph: Graph, node: GraphNode, scale: number, heavyScale: number): CacheEntry | null {
+    this.inNamespace('heavy', () => this.render(graph, { nodeId: node.id, scale: heavyScale }));
+    const src = this.namespaces.get('heavy')?.cache.get(node.id);
+    if (!src || this.errors.get(node.id)?.startsWith('[pending]')) return null;
+    const key = JSON.stringify(['heavy', src.key, scale]);
+    const cached = this.cache.get(node.id);
+    if (cached?.key === key) return cached;
+    const w = Math.max(1, Math.round(src.fullSize.width * scale));
+    const h = Math.max(1, Math.round(src.fullSize.height * scale));
+    const prog = this.gl.program(BLIT_FRAG);
+    const outputs: Record<string, Tex | null> = {};
+    const owned: Tex[] = [];
+    for (const [port, t] of Object.entries(src.outputs)) {
+      if (!t) {
+        outputs[port] = null;
+        continue;
+      }
+      const o = this.gl.acquire(w, h, t.filter);
+      this.gl.draw(prog, o, { u_src: t }, {});
+      outputs[port] = o;
+      owned.push(o);
+    }
+    cached?.owned.forEach((t) => this.gl.release(t));
+    const entry: CacheEntry = { key, outputs, owned, size: { width: w, height: h }, fullSize: src.fullSize };
+    this.cache.set(node.id, entry);
+    return entry;
+  }
+
   private inNamespace<T>(tag: string, fn: () => T): T {
     let ns = this.namespaces.get(tag);
     if (!ns) this.namespaces.set(tag, (ns = { cache: new Map(), cpu: new Map(), seen: new Map() }));
@@ -713,6 +755,13 @@ function resolveGroupTarget(graph: Graph, id: string, prefix = ''): { id: string
   const r = resolveGroupTarget(g.group.graph, e.from.node, prefix + id + '/');
   return r && { id: r.id, port: r.port || e.from.port };
 }
+
+const BLIT_FRAG = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 fragColor;
+uniform sampler2D u_src;
+void main() { fragColor = texture(u_src, v_uv); }`;
 
 const PRESENT_FRAG = `#version 300 es
 precision highp float;

@@ -1,0 +1,262 @@
+/* Color Ramp editor (src/ui/ColorRampEditor.tsx). Theme colours come from the shared tokens
+   (--field, --text, --sel, --lo/--hi/--dk; --m-* for aperture/aqua), so classic, aperture and
+   aqua all style it without per-theme rules beyond radii. */
+
+.cramp,
+.cramp-strip {
+  --cramp-ck-a: color-mix(in srgb, var(--field) 82%, var(--text));
+  --cramp-ck-b: color-mix(in srgb, var(--field) 58%, var(--text));
+}
+.cramp {
+  --cramp-edge: var(--lo);
+  --cramp-radius: 0px;
+  --cramp-flag: var(--face-3, var(--face));
+  --cramp-flag-line: var(--dk);
+  --cramp-active: var(--sel);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 6px 5px;
+  border-bottom: 1px solid var(--line);
+  outline: none;
+}
+.cramp:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--sel);
+}
+
+/* --- header: + − ▾  |  mode / hue / interpolation ------------------------ */
+.cramp-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.cramp-tools {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex: none;
+}
+.cramp-enums {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+.cramp-enums .select {
+  flex: 0 1 auto;
+  min-width: 0;
+  width: auto;
+}
+.cramp-caret {
+  display: block;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--text);
+}
+
+/* --- band: gradient bar + markers --------------------------------------- */
+.cramp-band {
+  padding: 0 6px; /* half a marker, so end stops don't clip */
+}
+.cramp-track {
+  position: relative;
+}
+.cramp-bar {
+  position: relative;
+  height: 24px;
+  border: 1px solid var(--cramp-edge);
+  border-radius: var(--cramp-radius);
+  overflow: hidden;
+  cursor: copy;
+  touch-action: none;
+}
+.cramp-checker,
+.cramp-swatch-checker,
+.cramp-strip {
+  background-color: var(--cramp-ck-a);
+  background-image: conic-gradient(var(--cramp-ck-b) 25%, transparent 0 50%, var(--cramp-ck-b) 0 75%, transparent 0);
+  background-size: 10px 10px;
+}
+.cramp-checker,
+.cramp-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.cramp-canvas {
+  display: block;
+  image-rendering: auto;
+}
+/* stop lines through the bar: a dark/light pair reads on any colour */
+.cramp-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  margin-left: -1.5px;
+  border-left: 1px solid rgba(0, 0, 0, 0.55);
+  border-right: 1px solid rgba(0, 0, 0, 0.55);
+  background: rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+  opacity: 0.75;
+}
+.cramp-line.active {
+  opacity: 1;
+  background: #fff;
+  border-color: rgba(0, 0, 0, 0.8);
+}
+.cramp-markers {
+  position: relative;
+  height: 15px;
+}
+.cramp-marker {
+  position: absolute;
+  top: 1px;
+  width: 12px;
+  height: 14px;
+  margin-left: -6px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.cramp-marker svg {
+  display: block;
+  overflow: visible;
+}
+.cramp-flag {
+  fill: var(--cramp-flag);
+  stroke: var(--cramp-flag-line);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+.cramp-chip {
+  stroke: rgba(0, 0, 0, 0.55);
+  stroke-width: 1;
+}
+.cramp-marker:hover .cramp-flag {
+  fill: var(--hi);
+}
+.cramp-marker.active .cramp-flag {
+  fill: var(--cramp-active);
+  stroke: var(--cramp-active);
+  stroke-width: 1.5;
+}
+.cramp-marker.active .cramp-chip {
+  stroke: #fff;
+}
+.cramp.dragging,
+.cramp.dragging * {
+  cursor: ew-resize !important;
+}
+
+/* --- active stop row ----------------------------------------------------- */
+.cramp-active {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.cramp-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.cramp-field .field.num {
+  color: var(--text);
+}
+.cramp-pos {
+  flex: 1;
+  min-width: 0;
+}
+.cramp-pos .field.num {
+  flex: 1;
+  width: 0;
+  min-width: 40px;
+}
+.cramp-swatch {
+  flex: 1;
+  min-width: 52px;
+  height: 20px;
+}
+.cramp-swatch > .cramp-swatch-checker {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--dk);
+  background-size: 8px 8px;
+}
+.cramp-swatch .cramp-swatch-checker > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+.cramp-hint {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- node body strip ------------------------------------------------------ */
+.cramp-strip {
+  position: relative;
+  height: 8px;
+  margin: 3px 6px 1px;
+  border: 1px solid var(--dk);
+  background-size: 8px 8px;
+  border-radius: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+.cramp-strip canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* --- Mac themes (aperture / aqua) ---------------------------------------- */
+:is([data-theme='aperture'], [data-theme='aqua']) .cramp {
+  --cramp-radius: 3px;
+  --cramp-edge: var(--m-field-border, var(--lo));
+  --cramp-flag: var(--m-field, var(--field));
+  --cramp-flag-line: var(--m-field-border, var(--dk));
+  --cramp-active: var(--m-sel-flat, var(--sel));
+  border-bottom-color: var(--m-line, var(--line));
+}
+:is([data-theme='aperture'], [data-theme='aqua']) .cramp-bar {
+  box-shadow: var(--m-field-shadow, none);
+}
+:is([data-theme='aperture'], [data-theme='aqua']) .cramp-swatch > .cramp-swatch-checker {
+  border-radius: 2px;
+  border-color: rgba(0, 0, 0, 0.6);
+}
+[data-theme='aperture'] .cramp {
+  --cramp-flag: var(--m-text, var(--text));
+  --cramp-flag-line: var(--m-gap, var(--dk));
+}
+[data-theme='aqua'] .cramp {
+  --cramp-flag: var(--m-field, var(--field));
+  --cramp-flag-line: var(--m-text-dim, var(--dk));
+}
+.cramp-subhead {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  color: var(--muted);
+  margin-top: -1px;
+}
+.cramp-subhead .select {
+  width: auto;
+  min-width: 0;
+}

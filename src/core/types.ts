@@ -170,6 +170,13 @@ export interface NodeDef {
    */
   volatile?: 'time' | 'live';
   /**
+   * Expensive node (AI inference, big CPU work). In the interactive viewer it is evaluated once at
+   * the "fit to window" preview resolution and only upscaled for display while zooming, instead of
+   * re-running at every zoom step; exports still run it at full resolution. Default: true for `ai.*`.
+   * See RenderOptions.heavyScale.
+   */
+  heavy?: boolean;
+  /**
    * Output size at FULL resolution. Default: size of first connected image input,
    * else the project size. The engine multiplies by render scale.
    */
@@ -178,6 +185,42 @@ export interface NodeDef {
   color?: string;
   /** Hidden from the add-node menu (e.g. group internals). */
   hidden?: boolean;
+  /**
+   * Interactive viewer tool shown while this node (or a group exposing its `param`) is selected.
+   * Shorthand kinds use the param `points` / `strokes` / `box`. See src/ui/viewerTools.
+   */
+  viewerTool?: ViewerToolKind | ViewerToolDef;
+  /**
+   * Custom parameter editor shown at the top of the Properties panel; it takes over the params it
+   * owns (hidden from the generic rows). 'colorRamp': `count`, `pos0..7`, `color0..7`,
+   * `interpolation`, `colorMode`, `hueInterpolation` (see src/ui/ColorRampEditor.tsx).
+   */
+  editor?: NodeEditorKind;
+}
+
+export type NodeEditorKind = 'colorRamp';
+
+export type ViewerToolKind = 'points' | 'brush' | 'box';
+
+/**
+ * Viewer tool options. Coordinates are normalised 0..1, top-left origin (same as v_uv).
+ * - points: `param` holds JSON `[{"x":0.5,"y":0.4,"label":1}, …]` (label 1 = positive, 0 = negative).
+ *   With `single`, there is one draggable point; with `vec2Param` it is written to that vec2 param instead.
+ *   With `boxParam`, a drag draws a box stored as JSON `[x0,y0,x1,y1]` (or "" for none).
+ * - brush: `param` holds JSON strokes `[{"r":0.03,"h":0.6,"e":0,"p":[x,y,x,y,…]}, …]`
+ *   (r = radius as a fraction of the image height, h = hardness 0..1, e = 1 for erase).
+ * - box: `param` holds JSON `[x0,y0,x1,y1]`.
+ */
+export interface ViewerToolDef {
+  kind: ViewerToolKind;
+  param?: string;
+  single?: boolean;
+  vec2Param?: string;
+  boxParam?: string;
+  /** Output port shown as a translucent tint over the image while the tool is active (mask outputs). */
+  previewPort?: string;
+  /** HUD title (default: the node name). */
+  label?: string;
 }
 
 // ---------------------------------------------------------------------------

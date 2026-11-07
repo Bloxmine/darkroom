@@ -42,6 +42,7 @@ export default [
     description: "Blender's Color Ramp: maps a factor (luminance of the input) through up to 8 colour stops. Interpolation Constant / Linear / Ease / Cardinal / B-Spline; RGB, HSV or HSL blending with near/far/clockwise/counter-clockwise hue (HSV/HSL apply to Linear and Ease, as in Blender). Outputs the colour (with stop alpha) and the alpha as a mask.",
     tags: ['gradient', 'ramp', 'colorband', 'gradient map', 'lut', 'false color', 'blender', 'valtorgb'],
     color: C_CONVERT,
+    editor: 'colorRamp',
     inputs: { fac: { type: 'mask', label: 'Factor' } },
     outputs: { color: { type: 'image', label: 'Color' }, alpha: { type: 'mask', label: 'Alpha' } },
     params: rampParams,

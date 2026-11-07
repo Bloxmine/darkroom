@@ -15,7 +15,7 @@ export interface ModelFile {
 export interface ModelInfo {
   id: string;
   name: string;
-  task: 'depth' | 'matting' | 'saliency';
+  task: 'depth' | 'matting' | 'saliency' | 'segmentation' | 'super-resolution' | 'inpainting' | 'colorization' | 'style-transfer' | 'low-light' | 'line-art' | 'denoising' | 'face' | 'pose' | 'face-restoration';
   licence: string;
   /** Model card. */
   page: string;
@@ -23,6 +23,10 @@ export interface ModelInfo {
   files: ModelFile[];
   /** Run on WASM even when WebGPU is active (ops the WebGPU EP lacks). */
   wasmOnly?: boolean;
+  /** Not run by ONNX Runtime (e.g. a MediaPipe .task): the AI Models panel only downloads/caches its first file. */
+  external?: boolean;
+  /** Turn the downloaded file into the ONNX bytes to load (e.g. free fixed input dims, or build a graph from raw weights). The download itself is cached as-is. */
+  prepare?: (buf: ArrayBuffer) => ArrayBuffer | Promise<ArrayBuffer>;
 }
 
 const hf = (repo: string, sha: string, file: string) => `https://huggingface.co/${repo}/resolve/${sha}/${file}`;
@@ -77,4 +81,9 @@ export function pickFile(model: ModelInfo, ep: 'webgpu' | 'wasm', shaderF16: boo
     if (f) return f;
   }
   return model.files.find((x) => x.precision === 'q8') ?? model.files.find((x) => x.precision === 'fp32') ?? model.files[0];
+}
+
+/** Add models to the catalog from another module (e.g. models-seg.ts). Additive; an existing id is replaced. */
+export function registerModel(...models: ModelInfo[]) {
+  for (const m of models) MODELS[m.id] = m;
 }

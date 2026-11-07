@@ -57,6 +57,8 @@ export interface Prefs {
   // Plugins & AI
   allowCodePlugins: boolean;
   aiPreferWebGPU: boolean;
+  /** Re-run AI nodes at the zoomed-in preview resolution (off: they stay at fit-to-window resolution until export). */
+  aiFollowZoom: boolean;
   // Keyboard: command id → combo ('' = no shortcut)
   keyOverrides: Record<string, string>;
   // Advanced
@@ -92,6 +94,7 @@ export const PREF_DEFAULTS: Prefs = {
   exportScale: 1,
   allowCodePlugins: true,
   aiPreferWebGPU: true,
+  aiFollowZoom: false,
   keyOverrides: {},
   showFps: false,
   showNodeIds: false,

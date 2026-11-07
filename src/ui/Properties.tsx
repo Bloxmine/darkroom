@@ -12,6 +12,7 @@ import { status } from '../store/ui';
 import { Panel } from './Chrome';
 import { ColorPopup, cssColor, toHex } from './ColorPicker';
 import { CurveEditor } from './CurveEditor';
+import { editorOwnsParam, NodeParamEditor } from './ColorRampEditor';
 import { NumField } from './NumField';
 import { Icon, nodeIcon } from './Icon';
 import { useContextMenu, type MenuItem } from './Menu';
@@ -340,6 +341,8 @@ export function Properties() {
   const def = getNodeDef(node.type);
   const params = getParamDefs(node);
   const visible = Object.entries(params).filter(([, d]) => !d.hidden);
+  const customEditor = node.type === GROUP ? undefined : def?.editor;
+  const shown = customEditor ? visible.filter(([k]) => !editorOwnsParam(customEditor, k)) : visible;
   const isGroup = node.type === GROUP;
   const ports = getPorts(node);
   const fid = flatId(path, node.id);
@@ -432,7 +435,8 @@ export function Properties() {
           }
         >
           {visible.length === 0 && <div className="pnote muted">{isGroup ? 'No exposed parameters.' : 'This node has no parameters.'}</div>}
-          {visible.map(([k, d]) => (
+          {customEditor && <NodeParamEditor kind={customEditor} node={node} />}
+          {shown.map(([k, d]) => (
             <ParamRow key={k} node={node} k={k} def={d} inGroup={path.length > 0} openMenu={ctx.open} />
           ))}
           {node.type === IMAGE && !node.params.asset && <div className="pnote">Tip: drop an image file onto the Node Graph to import it.</div>}

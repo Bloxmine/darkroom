@@ -147,7 +147,7 @@ export const MENUS: { title: string; items: () => MenuItem[] }[] = [
   },
   {
     title: 'Help',
-    items: () => [{ cmd: 'help.shortcuts' }, { sep: true }, { cmd: 'help.about' }],
+    items: () => [{ cmd: 'help.docs' }, { cmd: 'help.shortcuts' }, { sep: true }, { cmd: 'help.about' }],
   },
 ];
 

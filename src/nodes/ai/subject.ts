@@ -14,6 +14,30 @@ function dims(params: Params, w: number, h: number): [number, number] {
   return fitDims(w, h, Number(params.resolution) || 512, 32);
 }
 
+/**
+ * Low-res subject matte (RawTex, value in .r) of an RGBA float image: MODNet portrait matte or U²-Net-p
+ * salient-object map. Memoised by content fingerprint; shared with other nodes (e.g. ai.autoCrop).
+ */
+export async function subjectMatte(src: RawTex, model: 'portrait' | 'object', resolution = 512): Promise<RawTex> {
+  const u2 = model === 'object';
+  const [w, h] = dims({ model: u2 ? MODELS[1] : MODELS[0], resolution }, src.width, src.height);
+  const rgb = resampleRGB(src.data, src.width, src.height, w, h);
+  const key = u2 ? 'u2netp' : `modnet:${w}x${h}`;
+  return memo.get(key, fingerprint(rgb, w, h), Math.min(src.width, src.height), Math.min(w, h), async () => {
+    if (u2) {
+      // rembg preprocessing: divide by the image max, then ImageNet mean/std
+      let mx = 1e-6;
+      for (let i = 0; i < rgb.length; i++) if (rgb[i] > mx) mx = rgb[i];
+      const r = await runModel('u2netp', { data: toCHW(rgb, w, h, [0.485, 0.456, 0.406], [0.229, 0.224, 0.225], mx), dims: [1, 3, h, w] });
+      const [oh, ow] = r.dims.slice(-2);
+      return maskTex(normalizeMinMax(r.data), ow, oh);
+    }
+    const r = await runModel('modnet', { data: toCHW(rgb, w, h, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5]), dims: [1, 3, h, w] });
+    const [oh, ow] = r.dims.slice(-2);
+    return maskTex(r.data, ow, oh);
+  });
+}
+
 const subject = defineNode({
   id: 'ai.subjectMask',
   name: 'Subject Mask',
@@ -40,23 +64,7 @@ const subject = defineNode({
   cpu: async (ctx) => {
     const src = ctx.readInput('image');
     if (!src) return { matte: maskTex([1], 1, 1) };
-    const u2 = ctx.params.model === MODELS[1];
-    const [w, h] = dims(ctx.params, src.width, src.height);
-    const rgb = resampleRGB(src.data, src.width, src.height, w, h);
-    const key = u2 ? 'u2netp' : `modnet:${w}x${h}`;
-    const tex = await memo.get(key, fingerprint(rgb, w, h), Math.min(src.width, src.height), Math.min(w, h), async () => {
-      if (u2) {
-        // rembg preprocessing: divide by the image max, then ImageNet mean/std
-        let mx = 1e-6;
-        for (let i = 0; i < rgb.length; i++) if (rgb[i] > mx) mx = rgb[i];
-        const r = await runModel('u2netp', { data: toCHW(rgb, w, h, [0.485, 0.456, 0.406], [0.229, 0.224, 0.225], mx), dims: [1, 3, h, w] });
-        const [oh, ow] = r.dims.slice(-2);
-        return maskTex(normalizeMinMax(r.data), ow, oh);
-      }
-      const r = await runModel('modnet', { data: toCHW(rgb, w, h, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5]), dims: [1, 3, h, w] });
-      const [oh, ow] = r.dims.slice(-2);
-      return maskTex(r.data, ow, oh);
-    });
+    const tex = await subjectMatte(src, ctx.params.model === MODELS[1] ? 'object' : 'portrait', Number(ctx.params.resolution) || 512);
     return { matte: tex };
   },
   passes: [

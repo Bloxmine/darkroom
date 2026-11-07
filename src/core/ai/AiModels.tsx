@@ -108,7 +108,8 @@ export function AiModelsSection() {
 export function AiDownloadToast() {
   const s = useAiState();
   const active = Object.values(s.downloads).filter((d) => !d.done);
-  if (!active.length) return null;
+  const tasks = Object.entries(s.tasks ?? {});
+  if (!active.length && !tasks.length) return null;
   return (
     <div
       role="status"
@@ -140,9 +141,24 @@ export function AiDownloadToast() {
           </div>
         );
       })}
-      <div className="muted" style={{ marginTop: 2 }}>
-        One-time download; cached for offline use.
-      </div>
+      {tasks.map(([id, t]) => {
+        const pct = t.total ? Math.min(100, (t.done / t.total) * 100) : 0;
+        return (
+          <div key={id} style={{ margin: '2px 0' }}>
+            <div>
+              {t.label}… {t.done}/{t.total}
+            </div>
+            <div style={{ height: 6, background: 'var(--field, #fff)', border: '1px solid var(--lo, #808080)', marginTop: 2 }}>
+              <div style={{ width: `${pct}%`, height: '100%', background: 'var(--sel, #316ac5)' }} />
+            </div>
+          </div>
+        );
+      })}
+      {active.length > 0 && (
+        <div className="muted" style={{ marginTop: 2 }}>
+          One-time download; cached for offline use.
+        </div>
+      )}
     </div>
   );
 }

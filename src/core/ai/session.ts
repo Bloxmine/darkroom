@@ -9,17 +9,19 @@ export type Ep = 'webgpu' | 'wasm';
 export interface TensorData {
   data: Float32Array;
   dims: number[];
+  /** Feed as this ONNX type (values converted from `data`). Default float32. */
+  type?: 'float32' | 'int64';
 }
 
 export type AiRequest =
   | { type: 'init'; ep: Ep; wasm: ArrayBuffer; threads: number }
   | { type: 'load'; key: string; model: ArrayBuffer; /** force an EP (e.g. a model with ops WebGPU lacks) */ ep?: Ep }
-  | { type: 'run'; key: string; inputs: Record<string, TensorData>; output?: string }
+  | { type: 'run'; key: string; inputs: Record<string, TensorData>; output?: string; /** also return these outputs in `extra` */ outputs?: string[] }
   | { type: 'release'; key: string };
 
 export interface InitResult { ep: Ep; threads: number; f16: boolean }
 export interface LoadResult { ep: Ep; ms: number; inputs: string[]; outputs: string[] }
-export interface RunResult extends TensorData { ms: number; ep: Ep }
+export interface RunResult extends TensorData { ms: number; ep: Ep; /** outputs requested via `outputs` */ extra?: Record<string, TensorData> }
 
 export type AiResponse = { id: number; ok: true; value: unknown } | { id: number; ok: false; error: string };
 
@@ -81,23 +83,40 @@ export function createHost(ort: typeof Ort) {
         const h = new Uint16Array(t.data.length);
         for (let i = 0; i < h.length; i++) h[i] = toHalf(t.data[i]);
         feeds[name] = new ort.Tensor('float16', h, t.dims);
-      } else feeds[name] = new ort.Tensor('float32', t.data, t.dims);
+      } else if (t.type === 'int64') feeds[name] = new ort.Tensor('int64', BigInt64Array.from(t.data, (v) => BigInt(Math.round(v))), t.dims);
+      else feeds[name] = new ort.Tensor('float32', t.data, t.dims);
     }
     const t0 = performance.now();
     const out = await s.run(feeds);
     const ms = performance.now() - t0;
-    const tensor = out[msg.output ?? s.outputNames[0]];
-    let data: Float32Array;
-    const raw = await tensor.getData();
-    if (tensor.type === 'float16') {
-      const h = raw as unknown as ArrayLike<number>;
-      data = new Float32Array(h.length);
-      // Float16Array (newer Chromium) yields numbers; Uint16Array yields bits
-      const bits = raw instanceof Uint16Array;
-      for (let i = 0; i < h.length; i++) data[i] = bits ? fromHalf(h[i]) : h[i];
-    } else data = new Float32Array(raw as Float32Array);
+    const toF32 = async (tensor: Ort.Tensor) => {
+      const raw = await tensor.getData();
+      if (tensor.type === 'float16') {
+        const h = raw as unknown as ArrayLike<number>;
+        const data = new Float32Array(h.length);
+        // Float16Array (newer Chromium) yields numbers; Uint16Array yields bits
+        const bits = raw instanceof Uint16Array;
+        for (let i = 0; i < h.length; i++) data[i] = bits ? fromHalf(h[i]) : h[i];
+        return data;
+      }
+      return new Float32Array(raw as Float32Array);
+    };
+    const tensor = out[msg.output ?? msg.outputs?.[0] ?? s.outputNames[0]];
+    const data = await toF32(tensor);
+    const transfer: Transferable[] = [data.buffer];
+    let extra: Record<string, TensorData> | undefined;
+    if (msg.outputs) {
+      extra = {};
+      for (const name of msg.outputs) {
+        const t = out[name];
+        if (!t) continue;
+        const d = await toF32(t);
+        extra[name] = { data: d, dims: [...t.dims] };
+        transfer.push(d.buffer);
+      }
+    }
     for (const t of Object.values(out)) t.dispose?.();
-    return { value: { data, dims: [...tensor.dims], ms, ep: used } satisfies RunResult, transfer: [data.buffer] };
+    return { value: { data, dims: [...tensor.dims], ms, ep: used, extra } satisfies RunResult, transfer };
   }
 
   async function handle(msg: AiRequest): Promise<{ value: unknown; transfer?: Transferable[] }> {

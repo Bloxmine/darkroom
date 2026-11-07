@@ -5,6 +5,7 @@ import { importImageDialog, openProjectFile, saveProjectFile, saveProjectFileAs,
 import { setNodeThumbnails, setTheme, THEMES, useSettings } from '../store/settings';
 import { openDialog, status, useUi } from '../store/ui';
 import { zoomViewer } from './viewerApi';
+import { openDocs } from './docs/docs';
 import { canEditInBuilder, exportNodeType, importNodeFile, openNodeBuilder } from '../store/extensions';
 import * as T from '../store/timeline';
 
@@ -224,6 +225,7 @@ def({
 });
 
 // Help
+def({ id: 'help.docs', label: 'Darkroom Help', icon: 'book_open', run: () => openDocs() });
 def({ id: 'help.shortcuts', label: 'Keyboard Shortcuts', icon: 'keyboard', keys: 'F1', run: () => openDialog('shortcuts') });
 def({ id: 'help.about', label: 'About Darkroom…', icon: 'information', run: () => openDialog('about') });
 

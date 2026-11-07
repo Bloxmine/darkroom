@@ -14,7 +14,7 @@ Manage plugins in **Edit › Plugins…** (also under **Window**):
   (a relative URL like `/plugins/x.js` resolves against the app).
 - **My custom nodes:** your Node Builder library (edit, export or delete).
 - **Built-in node packs:** read-only counts per namespace.
-- **Plugin Docs:** opens `/plugins/README.md`.
+- **Plugin Docs:** opens this guide in the built-in help viewer (*Help › Darkroom Help*), which also has the plugin template README, node authoring and every other doc, with search.
 
 Example plugins (served from `public/plugins/`):
 - `/plugins/example-shader-pack.drplugin.json` (data): *Duotone*, *Sobel Glow* (2 passes, the first at

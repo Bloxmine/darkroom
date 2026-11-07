@@ -4,7 +4,7 @@ import type { Tex } from '../core/gl';
 import type { Graph } from '../core/types';
 import { effectiveViewed, useDoc } from './doc';
 import { useUi, type Quality } from './ui';
-import { previewCapScale } from './settings';
+import { currentPrefs, previewCapScale } from './settings';
 
 /**
  * The engine singleton. Lives outside React: it owns a canvas which the
@@ -120,10 +120,13 @@ function renderNow() {
   const zoom = ui.fit ? fitZoomFor(fw, fh) : ui.zoom;
   const scale = Math.min(ui.quality === 'full' ? 1 : Math.min(1, quantize(Math.min(1, zoom) * QUALITY_FACTOR[ui.quality])), previewCapScale(fw, fh)); // cap: Preferences › Performance
   previewScale = scale;
+  // AI / heavy nodes stay at the fit-to-window preview resolution while zooming (see RenderOptions.heavyScale).
+  const fitScale = Math.min(1, quantize(Math.min(1, fitZoomFor(fw, fh)) * QUALITY_FACTOR[ui.quality]), previewCapScale(fw, fh));
+  const heavyScale = ui.quality === 'full' || currentPrefs().aiFollowZoom ? undefined : fitScale;
 
   let res;
   try {
-    res = eng.render(graph, { nodeId: target, scale });
+    res = eng.render(graph, { nodeId: target, scale, heavyScale });
   } catch (e) {
     console.error(e);
     eng.present(null, { rect: { x: 0, y: 0, w: 0, h: 0 }, background: BG });

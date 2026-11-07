@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { DocsHost } from './ui/docs/DocsWindow';
 import './App.css';
 import './ui/themes/mac.css';
 import './ui/themes/aperture.css';
@@ -123,6 +124,7 @@ export default function App({ ready }: { ready: boolean }) {
       </div>
       <StatusBar />
       <Dialogs />
+      <DocsHost />
       <ExtensionsHost />
       {!ready && (
         <div className="modal-backdrop light">

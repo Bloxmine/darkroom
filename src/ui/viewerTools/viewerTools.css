@@ -1,0 +1,155 @@
+/* Viewer tools (ViewerToolOverlay.tsx). Theme tokens only, so classic / aperture / aqua all apply. */
+.vt-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  touch-action: none;
+}
+.vt-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.vt-tint {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  image-rendering: auto;
+}
+.vt-pt circle {
+  stroke: #fff;
+  stroke-width: 1.5;
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.6));
+}
+.vt-pt.pos circle {
+  fill: #23b45a;
+}
+.vt-pt.neg circle {
+  fill: #e0443a;
+}
+.vt-pt line {
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.vt-light circle {
+  fill: rgba(255, 236, 170, 0.35);
+  stroke: #fff;
+  stroke-width: 1.5;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.7));
+}
+.vt-light .vt-light-core {
+  fill: #fff6d0;
+}
+.vt-light line {
+  stroke: #fff6d0;
+  stroke-width: 2;
+  stroke-linecap: round;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.7));
+}
+.vt-box {
+  fill: none;
+  stroke: var(--sel);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+}
+.vt-brush {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.25;
+  filter: drop-shadow(0 0 1px #000);
+}
+.vt-brush.erase {
+  stroke-dasharray: 4 3;
+}
+
+.vt-hud,
+.vt-reopen {
+  position: absolute;
+  z-index: 3;
+  top: 8px;
+  left: 8px;
+}
+.vt-hud {
+  width: 250px;
+  padding: 6px 8px 7px;
+  background: var(--face);
+  color: var(--text);
+  border: 1px solid var(--lo);
+  border-radius: var(--m-radius, 3px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  font-size: 11px;
+  opacity: 0.96;
+  cursor: default;
+}
+.vt-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.vt-title b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vt-kind {
+  color: var(--muted);
+}
+.vt-busy {
+  margin-left: auto;
+  color: var(--sel);
+}
+.vt-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+}
+.vt-seg {
+  display: flex;
+  gap: 2px;
+}
+.vt-seg .btn {
+  min-width: 0;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.btn.vt-on {
+  background: var(--sel);
+  color: var(--sel-text);
+  border-color: var(--sel);
+}
+.vt-count,
+.vt-val {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.vt-slider > span:first-child {
+  width: 52px;
+}
+.vt-slider input {
+  flex: 1;
+  min-width: 0;
+}
+.vt-val {
+  width: 40px;
+  text-align: right;
+}
+.vt-hint {
+  color: var(--muted);
+  line-height: 1.35;
+  margin: 4px 0;
+}
+.vt-actions .btn {
+  min-width: 52px;
+}
+.vt-check {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}

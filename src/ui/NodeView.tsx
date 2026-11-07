@@ -8,6 +8,7 @@ import { engine } from '../store/engine';
 import { useSettings } from '../store/settings';
 import { Icon, nodeColor, nodeIcon } from './Icon';
 import { NodeThumb } from './NodeThumb';
+import { RampStrip } from './ColorRampEditor';
 
 export interface NodeData extends Record<string, unknown> {
   node: GraphNode;
@@ -74,6 +75,7 @@ function NodeViewImpl({ data, selected }: NodeProps<DrNode>) {
       </div>
       {sub && <div className="dn-sub">{sub}</div>}
       {thumbs && !unknown && <NodeThumb node={node} />}
+      {def?.editor === 'colorRamp' && <RampStrip node={node} />}
       <div className="dn-ports">
         {Array.from({ length: rows }, (_, i) => {
           const inp = ins[i];

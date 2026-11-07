@@ -1,7 +1,7 @@
 {
   "name": "darkroom",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "main": "dist-electron/main.mjs",
   "scripts": {
@@ -14,7 +14,9 @@
     "snap": "node scripts/snap.mjs",
     "electron:dev": "node scripts/electron-dev.mjs",
     "electron:compile": "node scripts/build-electron.mjs",
-    "electron:build": "tsc -b && vite build --mode electron --outDir dist-app && node scripts/build-electron.mjs && electron-builder --mac --publish never",
+    "electron:build": "tsc -b && vite build --mode electron --outDir dist-app && node scripts/build-electron.mjs && electron-builder --mac --universal --publish never",
+    "electron:build:arm64": "tsc -b && vite build --mode electron --outDir dist-app && node scripts/build-electron.mjs && electron-builder --mac dmg zip --arm64 --publish never",
+    "electron:build:x64": "tsc -b && vite build --mode electron --outDir dist-app && node scripts/build-electron.mjs && electron-builder --mac dmg zip --x64 --publish never",
     "electron:icon": "node scripts/make-icns.mjs"
   },
   "dependencies": {
@@ -25,11 +27,13 @@
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.15",
     "@lezer/highlight": "^1.2.5",
+    "@mediapipe/tasks-vision": "0.10.35",
     "@xyflow/react": "^12.12.1",
     "codemirror": "^6.0.2",
     "fflate": "^0.8.3",
     "immer": "^11.2.9",
     "libraw-wasm": "^1.6.0",
+    "marked": "^15.0.12",
     "mediabunny": "^1.65.2",
     "onnxruntime-web": "^1.31.1",
     "react": "^19.3.1",
@@ -77,11 +81,24 @@
       "category": "public.app-category.photography",
       "icon": "build/icon.icns",
       "target": [
-        "dmg"
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
       ],
       "identity": null,
       "hardenedRuntime": false,
       "darkModeSupport": true,
+      "minimumSystemVersion": "13.0",
+      "mergeASARs": true,
       "extendInfo": {
         "NSCameraUsageDescription": "Darkroom uses the camera for live webcam input nodes.",
         "NSMicrophoneUsageDescription": "Darkroom may record audio together with webcam video.",

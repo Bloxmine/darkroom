@@ -1,4 +1,5 @@
 import { useMemo, useState, useSyncExternalStore } from 'react';
+import { openDocs } from './docs/docs';
 import { AiDownloadToast, AiModelsSection } from '../core/ai/AiModels';
 import { deleteUserNode, getNodeOrigin, listUserNodes } from '../core/customNodes';
 import {
@@ -222,7 +223,7 @@ export function PluginManager() {
         width={760}
         buttons={
           <>
-            <button className="btn nb-left-btn" onClick={() => window.open('/plugins/README.md', '_blank')}>
+            <button className="btn nb-left-btn" onClick={() => openDocs('docs/PLUGINS.md')}>
               <Icon name="book_open" /> Plugin Docs
             </button>
             <button className="btn default" onClick={closeDialog} autoFocus>

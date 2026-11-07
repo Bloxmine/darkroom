@@ -11,6 +11,7 @@ import { Icon } from './Icon';
 import { ToolButton } from './Toolbar';
 import { AnimateButton, Transport } from './Transport';
 import { zoomViewer } from './viewerApi';
+import { ViewerToolOverlay } from './viewerTools/ViewerToolOverlay';
 
 function useViewedName() {
   const key = useDoc((s) => {
@@ -206,6 +207,7 @@ export function Viewer() {
             <span className="split-tag b">B</span>
           </div>
         )}
+        <ViewerToolOverlay host={host} spaceDown={spaceDown} />
         {engineError && (
           <div className="viewer-error">
             <Icon name="error" /> WebGL2 is not available: {engineError}
