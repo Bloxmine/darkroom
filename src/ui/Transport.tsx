@@ -3,6 +3,7 @@ import { frameCount, frameOf, inMotion, seek, setTimeline, togglePlay, useTimeli
 import { useUi } from '../store/ui';
 import { NumField } from './NumField';
 import { ToolButton } from './Toolbar';
+import { onSpaceTap } from './viewer/spaceKey';
 import './transport.css';
 
 /** mm:ss.ff (ff = frame within the second). */
@@ -21,23 +22,23 @@ const isTyping = (t: EventTarget | null) => {
   return el.tagName === 'INPUT' && !['checkbox', 'radio', 'button'].includes((el as HTMLInputElement).type);
 };
 
-/** Space = play/pause (when the project is in motion and focus isn't in a field). */
+/**
+ * Space *tap* = play/pause (when the project is in motion and focus isn't in a field). Holding
+ * Space and dragging pans the viewer / node graph instead (see viewer/spaceKey.ts).
+ */
 function useTransportKeys() {
   useEffect(() => {
-    const kd = (e: KeyboardEvent) => {
-      if (e.code !== 'Space' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
-      if (useUi.getState().dialog || useUi.getState().quickAdd || isTyping(e.target) || !inMotion()) return;
-      e.preventDefault();
+    const offTap = onSpaceTap(() => {
+      if (useUi.getState().dialog || useUi.getState().quickAdd || isTyping(document.activeElement) || !inMotion()) return;
       togglePlay();
-    };
+    });
     // ←/→ on a focused range input adjust that slider, not the timeline (commands.ts handles them otherwise)
     const guard = (e: KeyboardEvent) => {
       if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && (e.target as HTMLInputElement)?.type === 'range') e.stopPropagation();
     };
-    window.addEventListener('keydown', kd);
     window.addEventListener('keydown', guard, true);
     return () => {
-      window.removeEventListener('keydown', kd);
+      offTap();
       window.removeEventListener('keydown', guard, true);
     };
   }, []);

@@ -60,6 +60,12 @@ export async function fetchCached(url: string, onProgress?: Progress, expectedBy
   return { buffer, fromCache: false };
 }
 
+/** Is `url` already in the model cache? */
+export async function isCached(url: string): Promise<boolean> {
+  const cache = await openCache();
+  return !!(await cache?.match(url).catch(() => undefined));
+}
+
 /** Cached URLs → size in bytes. */
 export async function listCached(): Promise<Record<string, number>> {
   const cache = await openCache();

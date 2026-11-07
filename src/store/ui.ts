@@ -49,6 +49,8 @@ export interface UiState {
   messageKind: 'info' | 'error';
   // render stats
   renderMs: number;
+  /** Nodes re-rendered by the last render that did any work. */
+  renderNodes: number;
   fullWidth: number;
   fullHeight: number;
   renderScale: number;
@@ -79,6 +81,7 @@ export const useUi = create<UiState>(() => ({
   message: 'Ready',
   messageKind: 'info',
   renderMs: 0,
+  renderNodes: 0,
   fullWidth: 0,
   fullHeight: 0,
   renderScale: 1,

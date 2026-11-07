@@ -1,5 +1,5 @@
 /** Object removal with LaMa: per masked region, crop with context → 512² → inpaint → feathered paste-back. */
-import { InferenceMemo, resampleRGB } from '../../core/ai/image';
+import { InferenceMemo, resampleRGB, throwIfAborted } from '../../core/ai/image';
 import { runModelMulti } from '../../core/ai/runtime';
 import { defineNode } from '../../core/registry';
 import type { NodeDef, RawTex } from '../../core/types';
@@ -128,7 +128,7 @@ function hashMask(m: Uint8Array) {
   return (h >>> 0).toString(36);
 }
 
-async function inpaintRegions(rgb: Float32Array, hole: Uint8Array, W: number, H: number, pad: number, margin: number): Promise<Patch[]> {
+async function inpaintRegions(rgb: Float32Array, hole: Uint8Array, W: number, H: number, pad: number, margin: number, signal?: AbortSignal): Promise<Patch[]> {
   // crops per component, merged while they overlap
   let rects = components(hole, W, H).map((b) => ({ b, r: cropFor(b, W, H, pad, margin) }));
   for (let merged = true; merged && rects.length > 1; ) {
@@ -165,6 +165,7 @@ async function inpaintRegions(rgb: Float32Array, hole: Uint8Array, W: number, H:
         image[2 * S * S + i] = img[i * 3 + 2];
         mask[i] = msk[i * 3] > 0.01 ? 1 : 0; // any coverage → fill
       }
+      throwIfAborted(signal);
       const res = await runModelMulti('lama', { image: { data: image, dims: [1, 3, S, S] }, mask: { data: mask, dims: [1, 1, S, S] } });
       const out = Object.values(res)[0].data;
       let mx = 0;
@@ -227,8 +228,10 @@ const inpaint = defineNode({
     if (isFlat(fp)) return none;
     const pad = Number(ctx.params.context ?? 0.6);
     const margin = Math.ceil(fea);
-    const patches = await memo.get(`lama:${size}:${pad}:${margin}:${hashMask(hole)}`, fp, Math.min(W, H), Math.min(W, H), () =>
-      inpaintRegions(rgb, hole, W, H, pad, margin),
+    const patches = await memo.get(
+      `lama:${size}:${pad}:${margin}:${hashMask(hole)}`, fp, Math.min(W, H), Math.min(W, H),
+      (sig) => inpaintRegions(rgb, hole, W, H, pad, margin, sig),
+      ctx.signal,
     );
     // compose: fill colour + blend alpha (1 inside the grown mask, feathered outside)
     const fill = new Uint8Array(W * H * 4);

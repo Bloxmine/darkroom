@@ -77,9 +77,9 @@ export function StatusBar() {
           {errCount} error{errCount > 1 ? 's' : ''}
         </span>
       )}
-      <span className="sb-pane" title="Render time of the last viewer update">
+      <span className="sb-pane" title="Last viewer render that recomputed nodes: CPU time to evaluate the graph and submit GPU work, and how many nodes were re-rendered (cached frames are free)">
         <Icon name="clock" />
-        {ui.renderMs.toFixed(1)} ms
+        {ui.renderMs.toFixed(1)} ms · {ui.renderNodes} node{ui.renderNodes === 1 ? '' : 's'}
       </span>
       <span className="sb-pane" title="Full resolution of the viewed node">
         <Icon name="image" />

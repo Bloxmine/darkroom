@@ -26,6 +26,7 @@ const meta: [path: string, title: string, icon: string][] = [
   ['docs/PLUGINS.md', 'Plugins', 'plugin'],
   ['public/plugins/README.md', 'Plugin Template', 'plugin_add'],
   ['docs/AI.md', 'AI Nodes', 'brain'],
+  ['docs/CONTROLNET.md', 'ControlNet', 'artwork'],
   ['docs/VIDEO.md', 'Video', 'film'],
   ['docs/RAW_AND_BATCH.md', 'RAW & Batch', 'camera'],
   ['docs/DESKTOP.md', 'Mac App', 'computer'],

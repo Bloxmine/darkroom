@@ -18,6 +18,9 @@ import type { Edge, ExposedParam, Graph, GraphNode, ParamValue } from '../core/t
 import { commitGraph, commitProject, currentGraph, setPath, setSelection, setViewed, useDoc } from './doc';
 import { flatId, groupNodeAt, updateGraphAt } from './graphPath';
 import { status } from './ui';
+import { autoConnectSource, placeFree, rightOf } from './graphEdit';
+import { estimateSize, nodeSizes, useGraphUi } from './graphUi';
+import { spliceIntoEdge } from '../core/graphLayout';
 
 export type AddSpec = { kind: 'node'; type: string } | { kind: 'preset'; id: string };
 
@@ -52,28 +55,59 @@ export function buildNode(spec: AddSpec, pos: { x: number; y: number }): GraphNo
   return n;
 }
 
+export interface AddOpts {
+  /** Auto-connect (Preferences): with one node selected, place the new node right of it and wire it up. */
+  auto?: boolean;
+  /** Splice the new node into this edge. */
+  edge?: string;
+  /** Use `pos` as is (don't search for a free spot). */
+  exact?: boolean;
+}
+
+/** First port of `ports` whose type matches `type` (else the first one). */
+function pickPort(ports: Record<string, { type: string }>, type?: string): string | undefined {
+  const e = Object.entries(ports);
+  return (e.find(([, d]) => d.type === type) ?? e[0])?.[0];
+}
+
 /**
  * Add a node at the current level. If `from` is given, connect the new node's
- * first compatible port to it.
+ * first compatible port to it. New nodes never land on top of existing ones.
  */
 export function addNode(
   spec: AddSpec,
   pos: { x: number; y: number },
   from?: { node: string; port: string; kind: 'source' | 'target' },
+  opts: AddOpts = {},
 ): string | null {
   const n = buildNode(spec, pos);
   if (!n) return null;
+  const g0 = currentGraph();
+  const ports = getPorts(n);
+  const src = !from && !opts.edge && opts.auto ? autoConnectSource() : null;
+  const auto = src && Object.keys(ports.inputs).length ? src : null;
+  if (auto) n.position = rightOf(auto);
+  if (!opts.exact) n.position = placeFree(n.position, estimateSize(n, Math.max(Object.keys(ports.inputs).length, Object.keys(ports.outputs).length)), new Set(), g0);
+  const portsOf = (id: string) => {
+    const x = id === n.id ? n : g0.nodes.find((m) => m.id === id);
+    return x ? getPorts(x) : undefined;
+  };
   commitGraph((g) => {
     let ng: Graph = { ...g, nodes: [...g.nodes, n] };
     if (from) {
-      const ports = getPorts(n);
       if (from.kind === 'source') {
-        const inName = Object.keys(ports.inputs)[0];
+        const inName = pickPort(ports.inputs, portsOf(from.node)?.outputs[from.port]?.type);
         if (inName) ng = connect(ng, { node: from.node, port: from.port }, { node: n.id, port: inName });
       } else {
-        const outName = Object.keys(ports.outputs)[0];
+        const outName = pickPort(ports.outputs, portsOf(from.node)?.inputs[from.port]?.type);
         if (outName) ng = connect(ng, { node: n.id, port: outName }, { node: from.node, port: from.port });
       }
+    } else if (auto) {
+      const out = Object.keys(getPorts(auto).outputs)[0];
+      const inName = pickPort(ports.inputs, getPorts(auto).outputs[out]?.type);
+      if (out && inName) ng = connect(ng, { node: auto.id, port: out }, { node: n.id, port: inName });
+    } else if (opts.edge) {
+      ng = spliceIntoEdge(ng, opts.edge, n.id, portsOf, () => uid('e')) ?? ng;
     }
     return ng;
   });
@@ -100,14 +134,22 @@ export function removeEdges(ids: string[]) {
 
 export function deleteSelection() {
   const { selection, edgeSelection } = useDoc.getState();
-  if (!selection.length && !edgeSelection.length) return;
+  if (!selection.length && !edgeSelection.length && !useGraphUi.getState().frameSelection.length) return;
   const sel = new Set(selection);
   const es = new Set(edgeSelection);
-  commitGraph((g) => ({
-    nodes: g.nodes.filter((n) => !sel.has(n.id)),
-    edges: g.edges.filter((e) => !es.has(e.id) && !sel.has(e.from.node) && !sel.has(e.to.node)),
-  }));
+  const fs = new Set(useGraphUi.getState().frameSelection);
+  commitGraph((g) => {
+    const out: Graph = {
+      ...g,
+      nodes: g.nodes.filter((n) => !sel.has(n.id)),
+      edges: g.edges.filter((e) => !es.has(e.id) && !sel.has(e.from.node) && !sel.has(e.to.node)),
+    };
+    if (fs.size && g.frames) out.frames = g.frames.filter((f) => !fs.has(f.id));
+    if (out.frames && !out.frames.length) delete out.frames;
+    return out;
+  });
   setSelection([]);
+  if (fs.size) useGraphUi.setState({ frameSelection: [] });
 }
 
 export function moveNodes(pos: Record<string, { x: number; y: number }>) {
@@ -149,6 +191,16 @@ export function copySelection(): boolean {
 }
 
 function pasteData(data: ClipData, offset: { x: number; y: number }) {
+  // keep the pasted block clear of existing nodes: place its bounding box at the nearest free spot
+  const sz = (n: GraphNode) => nodeSizes.measured(n.id) ?? estimateSize(n, Math.max(Object.keys(getPorts(n).inputs).length, Object.keys(getPorts(n).outputs).length));
+  const minX = Math.min(...data.nodes.map((n) => n.position.x));
+  const minY = Math.min(...data.nodes.map((n) => n.position.y));
+  const box = {
+    width: Math.max(...data.nodes.map((n) => n.position.x + sz(n).width)) - minX,
+    height: Math.max(...data.nodes.map((n) => n.position.y + sz(n).height)) - minY,
+  };
+  const at = placeFree({ x: minX + offset.x, y: minY + offset.y }, box);
+  offset = { x: at.x - minX, y: at.y - minY };
   const idMap = new Map(data.nodes.map((n) => [n.id, n.type === GROUP ? uid('g') : uid()]));
   const nodes = data.nodes.map((n) => ({ ...clone(n), id: idMap.get(n.id)!, position: { x: n.position.x + offset.x, y: n.position.y + offset.y } }));
   const edges = data.edges.map((e) => ({
@@ -156,7 +208,7 @@ function pasteData(data: ClipData, offset: { x: number; y: number }) {
     from: { node: idMap.get(e.from.node)!, port: e.from.port },
     to: { node: idMap.get(e.to.node)!, port: e.to.port },
   }));
-  commitGraph((g) => ({ nodes: [...g.nodes, ...nodes], edges: [...g.edges, ...edges] }));
+  commitGraph((g) => ({ ...g, nodes: [...g.nodes, ...nodes], edges: [...g.edges, ...edges] }));
   setSelection(nodes.map((n) => n.id));
 }
 
@@ -397,13 +449,16 @@ export function exposedAs(nodeId: string, param: string): ExposedParam | undefin
   return g?.group?.exposed.find((e) => e.node === nodeId && e.param === param);
 }
 
-/** Default spot for new nodes when no position is known: right of the current graph's nodes. */
+/**
+ * Default spot for new nodes when no position is known: right of the selected node, else below
+ * the graph's left column. addNode() then nudges it to the nearest spot that overlaps nothing.
+ */
 export function freeSpot(): { x: number; y: number } {
   const g = currentGraph();
   if (!g.nodes.length) return { x: 0, y: 0 };
   const sel = useDoc.getState().selection;
   const ref = g.nodes.find((n) => n.id === sel[0]);
-  if (ref) return { x: ref.position.x + 40, y: ref.position.y + 120 };
+  if (ref) return rightOf(ref);
   return { x: Math.min(...g.nodes.map((n) => n.position.x)), y: Math.max(...g.nodes.map((n) => n.position.y)) + 140 };
 }
 

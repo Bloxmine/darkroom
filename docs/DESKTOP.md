@@ -179,6 +179,8 @@ launch's window background.
 | `onMenuCommand(cb)` | event | `(id, viaAccelerator)` |
 | `onOpenFiles(cb)` | event | Finder / Dock / Open Recent files |
 | `ready()` | send | renderer booted, flush queued files |
+| `onSaveBeforeClose(cb)` / `closeAfterSave(saved)` | event / send | closing a window with unsaved changes: main shows Save / Cancel / Don't Save; on Save the renderer saves and replies (a cancelled save dialog keeps the window open, and also cancels ⌘Q) |
+| `setGenServer(url \| null)` | send | Preferences › Generation server; main relaxes CORS/Origin for exactly that origin (see docs/CONTROLNET.md) |
 
 ## Security choices
 

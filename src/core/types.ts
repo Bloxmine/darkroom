@@ -137,6 +137,11 @@ export interface CpuContext {
   time?: number;
   /** Engine frame index (u_frame; 0 for stills). */
   frame?: number;
+  /**
+   * Aborted when this cpu() run is superseded (params/inputs changed before it finished). Long
+   * jobs (tiled AI) should check it between steps and stop early. See InferenceMemo for sharing.
+   */
+  signal?: AbortSignal;
 }
 
 export interface NodeDef {
@@ -254,6 +259,8 @@ export interface GraphNode {
   bypass?: boolean;
   /** Collapsed UI state. */
   collapsed?: boolean;
+  /** Editor colour tag (a palette name like 'red', or a CSS colour). UI only; the engine ignores it. */
+  color?: string;
   /** Only for type 'core.group'. */
   group?: GroupData;
 }
@@ -267,6 +274,24 @@ export interface Edge {
 export interface Graph {
   nodes: GraphNode[];
   edges: Edge[];
+  /** Editor backdrops and sticky notes (UI only; the engine ignores them). */
+  frames?: Frame[];
+}
+
+/**
+ * A titled, coloured rectangle drawn behind nodes in the graph editor (a "backdrop"),
+ * or a sticky note (`kind: 'note'`). Moving a frame moves the nodes whose centre lies inside it.
+ */
+export interface Frame {
+  id: string;
+  kind?: 'frame' | 'note';
+  title: string;
+  /** Free text shown under the title (the whole body of a sticky note). */
+  note?: string;
+  /** Palette name ('blue', 'green'…) or a CSS colour ('#aabbcc'). */
+  color?: string;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
 }
 
 /**

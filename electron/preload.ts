@@ -30,6 +30,9 @@ const api: DarkroomNative = {
   onMenuCommand: (cb) => listen<[string, boolean]>(IPC.menuCommand, cb),
   onOpenFiles: (cb) => listen<[OpenedFile[]]>(IPC.openFiles, cb),
   ready: () => ipcRenderer.send(IPC.ready),
+  onSaveBeforeClose: (cb) => listen<[]>(IPC.saveBeforeClose, cb),
+  closeAfterSave: (saved) => ipcRenderer.send(IPC.closeAfterSave, saved),
+  setGenServer: (url) => ipcRenderer.send(IPC.setGenServer, url),
 };
 
 contextBridge.exposeInMainWorld('darkroomNative', api);

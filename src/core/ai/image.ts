@@ -161,20 +161,46 @@ function similar(a: Uint8Array, b: Uint8Array) {
  * now available (then it re-runs for quality).
  */
 export class InferenceMemo<T> {
-  private entries: { key: string; fp: Uint8Array; srcShort: number; value: Promise<T> }[] = [];
+  private entries: { key: string; fp: Uint8Array; srcShort: number; value: Promise<T>; ctl: AbortController; waiters: number; done: boolean }[] = [];
   constructor(private max = 8) {}
 
-  get(key: string, fp: Uint8Array, srcShort: number, needShort: number, run: () => Promise<T>): Promise<T> {
-    const i = this.entries.findIndex((e) => e.key === key && similar(e.fp, fp) && e.srcShort >= Math.min(srcShort, needShort));
-    if (i >= 0) {
-      const [e] = this.entries.splice(i, 1);
-      this.entries.unshift(e);
-      return e.value;
+  /**
+   * Shared, de-duplicated inference. `run` receives a signal that fires only when *every* caller
+   * waiting on this job has aborted (their `signal`), so a superseded preview stops a long tiled job
+   * without breaking another consumer (thumbnails, the zoom proxy) that still needs the result.
+   */
+  get(key: string, fp: Uint8Array, srcShort: number, needShort: number, run: (signal: AbortSignal) => Promise<T>, signal?: AbortSignal): Promise<T> {
+    const i = this.entries.findIndex((e) => e.key === key && similar(e.fp, fp) && e.srcShort >= Math.min(srcShort, needShort) && !e.ctl.signal.aborted);
+    let entry = i >= 0 ? this.entries.splice(i, 1)[0] : undefined;
+    if (!entry) {
+      const ctl = new AbortController();
+      const e = { key, fp, srcShort, value: undefined as unknown as Promise<T>, ctl, waiters: 0, done: false };
+      e.value = run(ctl.signal).finally(() => (e.done = true));
+      e.value.catch(() => (this.entries = this.entries.filter((x) => x !== e)));
+      entry = e;
     }
-    const entry = { key, fp, srcShort, value: run() };
-    entry.value.catch(() => (this.entries = this.entries.filter((e) => e !== entry)));
     this.entries.unshift(entry);
     if (this.entries.length > this.max) this.entries.length = this.max;
-    return entry.value;
+    const e = entry;
+    e.waiters++;
+    if (signal) {
+      const leave = () => {
+        // grace period: a re-render that needs the very same job (e.g. only a shader param changed)
+        // re-joins it before it is cancelled
+        if (--e.waiters <= 0 && !e.done) setTimeout(() => {
+          if (e.waiters > 0 || e.done) return;
+          console.info('[darkroom ai] cancelled superseded job', e.key);
+          e.ctl.abort();
+        }, 400);
+      };
+      if (signal.aborted) leave();
+      else signal.addEventListener('abort', leave, { once: true });
+    }
+    return e.value;
   }
+}
+
+/** Throw if a long job was cancelled (call between tiles / regions / faces). */
+export function throwIfAborted(signal?: AbortSignal) {
+  if (signal?.aborted) throw new DOMException('Superseded by a newer render', 'AbortError');
 }

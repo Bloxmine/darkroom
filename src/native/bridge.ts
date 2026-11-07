@@ -17,7 +17,7 @@ import { commands, keyHooks } from '../ui/commands';
 import type { MenuItem } from '../ui/Menu';
 import { MENUS } from '../ui/MenuBar';
 import type { EditRole, NativeMenuItem, NativeMenuState, NativeMenuTemplate } from './api';
-import { handleOpenedFiles, useDocFile } from './files';
+import { handleOpenedFiles, saveProject, useDocFile } from './files';
 import { native } from './native';
 
 /** Edit commands that act on the focused text field instead of the graph while typing. */
@@ -230,6 +230,22 @@ export function initNative(booted: Promise<unknown>) {
   doc();
   useDoc.subscribe(doc);
   useDocFile.subscribe(doc);
+
+  // window close with unsaved changes: main asks us to save first
+  native.onSaveBeforeClose(() => {
+    void saveProject(false).then(
+      () => native!.closeAfterSave(!useDoc.getState().dirty),
+      () => native!.closeAfterSave(false),
+    );
+  });
+
+  // Stable Diffusion bridge: tell main which server origin it may relax CORS for (null = off)
+  const gen = () => {
+    const s = useSettings.getState();
+    native!.setGenServer(s.genServer === 'comfyui' ? s.genUrlComfy : s.genServer === 'a1111' ? s.genUrlA1111 : null);
+  };
+  gen();
+  useSettings.subscribe((s, p) => (s.genServer !== p.genServer || s.genUrlComfy !== p.genUrlComfy || s.genUrlA1111 !== p.genUrlA1111) && gen());
 
   // Finder → app (queued in main until we're ready)
   native.onOpenFiles((files) => void handleOpenedFiles(files));

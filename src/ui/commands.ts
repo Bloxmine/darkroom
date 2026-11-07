@@ -8,6 +8,9 @@ import { zoomViewer } from './viewerApi';
 import { openDocs } from './docs/docs';
 import { canEditInBuilder, exportNodeType, importNodeFile, openNodeBuilder } from '../store/extensions';
 import * as T from '../store/timeline';
+import * as GE from '../store/graphEdit';
+import { useGraphUi } from '../store/graphUi';
+import { savePresetFromSelection } from '../store/presets';
 
 /** Imperative hooks registered by the graph editor (fit view, quick-add at cursor…). */
 export const graphApi = {
@@ -79,8 +82,8 @@ def({
   label: 'Delete',
   icon: 'cross',
   keys: 'Delete|Backspace',
-  run: A.deleteSelection,
-  enabled: () => hasSel() || useDoc.getState().edgeSelection.length > 0,
+  run: () => GE.requestDelete(A.deleteSelection), // asks first above Preferences › General › confirm-delete count
+  enabled: () => hasSel() || useDoc.getState().edgeSelection.length > 0 || useGraphUi.getState().frameSelection.length > 0,
 });
 def({ id: 'edit.prefs', label: 'Preferences…', icon: 'setting_tools', keys: 'Ctrl+,', run: () => openDialog('prefs') });
 def({ id: 'edit.selectAll', label: 'Select All', icon: 'table_select_all', keys: 'Ctrl+A', run: A.selectAll });
@@ -173,6 +176,29 @@ def({
     useDoc.setState({ viewed: null });
     status('Viewing project output.');
   },
+});
+
+// Node › Arrange / Frames (node-graph editor, see store/graphEdit.ts)
+const sel2 = () => useDoc.getState().selection.length > 1;
+def({ id: 'graph.tidy', label: 'Tidy Up Graph', icon: 'chart_organisation', keys: 'Shift+L', run: GE.tidyUp, enabled: () => currentGraph().nodes.length > 1 });
+def({ id: 'graph.alignLeft', label: 'Align Left', icon: 'shape_align_left', run: () => GE.alignSelection('left'), enabled: sel2 });
+def({ id: 'graph.alignTop', label: 'Align Top', icon: 'shape_align_top', run: () => GE.alignSelection('top'), enabled: sel2 });
+def({ id: 'graph.distributeH', label: 'Distribute Horizontally', icon: 'shape_align_center', run: () => GE.distributeSelection('x'), enabled: () => useDoc.getState().selection.length > 2 });
+def({ id: 'graph.distributeV', label: 'Distribute Vertically', icon: 'shape_align_middle', run: () => GE.distributeSelection('y'), enabled: () => useDoc.getState().selection.length > 2 });
+def({ id: 'graph.frame', label: 'Frame Selection', icon: 'shape_square_add', keys: 'Ctrl+J', run: () => void GE.addFrame(graphApi.mouseFlowPos() ?? undefined) });
+def({ id: 'graph.note', label: 'Add Sticky Note', icon: 'note_add', keys: 'Shift+N', run: () => void GE.addFrame(graphApi.mouseFlowPos() ?? undefined, 'note') });
+def({ id: 'graph.selectUp', label: 'Select Upstream', icon: 'arrow_left', keys: 'Shift+ArrowLeft', run: () => GE.selectConnected('up'), enabled: hasSel });
+def({ id: 'graph.selectDown', label: 'Select Downstream', icon: 'arrow_right', keys: 'Shift+ArrowRight', run: () => GE.selectConnected('down'), enabled: hasSel });
+def({ id: 'node.collapse', label: 'Collapse / Expand Node', icon: 'bullet_arrow_up', keys: 'H', run: () => GE.setCollapsed(undefined), enabled: hasSel });
+def({ id: 'node.rename', label: 'Rename Node…', icon: 'textfield_rename', keys: 'F2', run: () => useGraphUi.setState({ renaming: useDoc.getState().selection[0] ?? null }), enabled: hasSel });
+def({ id: 'node.savePreset', label: 'Save as Preset…', icon: 'star', run: savePresetFromSelection, enabled: hasSel });
+def({
+  id: 'view.minimap',
+  label: 'Minimap',
+  icon: 'map',
+  keys: 'Shift+M',
+  run: () => useSettings.setState((s) => ({ minimap: !s.minimap })),
+  checked: () => useSettings.getState().minimap,
 });
 
 // Node › custom nodes, Edit › Plugins (phase 5)

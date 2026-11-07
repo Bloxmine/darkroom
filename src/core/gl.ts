@@ -16,6 +16,13 @@ interface ProgramInfo {
   uniforms: Map<string, { loc: WebGLUniformLocation; type: number; size: number }>;
 }
 
+const U8_BLIT = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 fragColor;
+uniform sampler2D u_src;
+void main() { fragColor = clamp(texelFetch(u_src, ivec2(gl_FragCoord.xy), 0), 0.0, 1.0); }`;
+
 const VERT = `#version 300 es
 in vec2 a_pos;
 out vec2 v_uv;
@@ -304,9 +311,18 @@ export class GL {
 
   /** Read as 8-bit RGBA (top row first). Float textures are clamped/rounded. */
   readU8(t: Tex): Uint8ClampedArray<ArrayBuffer> {
-    const f = this.readFloat(t);
-    const out = new Uint8ClampedArray(f.length);
-    for (let i = 0; i < f.length; i++) out[i] = Math.round(f[i] * 255);
+    const gl = this.gl;
+    const out = new Uint8ClampedArray(t.width * t.height * 4);
+    // Float textures: let the GPU convert into an RGBA8 target (clamped, rounded) and read bytes
+    // directly. Reading floats first needs 4× the memory, which is gigabytes for big exports.
+    const tmp = t.float ? this.createTarget(t.width, t.height, 'nearest', false) : null;
+    if (tmp) this.draw(this.program(U8_BLIT), tmp, { u_src: t }, {});
+    const fb = tmp?.fb ?? t.fb ?? this.tmpFb(t);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.readPixels(0, 0, t.width, t.height, gl.RGBA, gl.UNSIGNED_BYTE, out);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    if (tmp) this.destroy(tmp);
+    else if (!t.fb) gl.deleteFramebuffer(fb);
     return out;
   }
 

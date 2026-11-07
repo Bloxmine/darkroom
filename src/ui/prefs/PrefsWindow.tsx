@@ -10,6 +10,7 @@ import { resetPrefs, type Prefs } from '../../store/settings';
 import { closeDialog } from '../../store/ui';
 import { Button } from './controls';
 import { KeyboardPane } from './KeyboardPane';
+import { GenerationPane } from '../../core/sd/GenerationPane';
 import { recording } from './keys';
 import { AdvancedPane, AppearancePane, ExportPane, GeneralPane, PerformancePane, PluginsPane, ViewerPane, type Ask, type PaneProps } from './panes';
 
@@ -28,7 +29,7 @@ const PANES: PaneDef[] = [
     label: 'General',
     icon: 'setting_tools',
     Comp: GeneralPane,
-    keys: ['launchAction', 'autosaveMs', 'undoDepth', 'confirmDiscard', 'defaultProjectName'],
+    keys: ['launchAction', 'autosaveMs', 'undoDepth', 'confirmDiscard', 'defaultProjectName', 'autoConnect', 'insertOnWire', 'confirmDeleteOver'],
     help: [
       'Choose what Darkroom shows when it starts: the project you were last working on (restored from autosave), the starter project with a sample photo, or an empty graph.',
       'Autosave stores the open project in this browser so it survives a reload. “After every change” saves about a second after you stop editing; the timed settings save at most that often.',
@@ -40,7 +41,7 @@ const PANES: PaneDef[] = [
     label: 'Appearance',
     icon: 'color_wheel',
     Comp: AppearancePane,
-    keys: ['theme', 'uiScale', 'nodeThumbnails', 'minimap', 'wireStyle', 'grid', 'nodeTooltips'],
+    keys: ['theme', 'uiScale', 'nodeThumbnails', 'minimap', 'wireStyle', 'grid', 'nodeTooltips', 'nodeIdTooltips', 'snapToGrid', 'gridSize', 'minimapPos'],
     help: [
       'Click a picture to change the look of the whole application. Automatic follows the system: Aperture in Dark Mode, Aqua in Light Mode.',
       'Interface size enlarges the menus, toolbars, panels and status bar. The node graph and viewer keep their own zoom.',
@@ -52,11 +53,12 @@ const PANES: PaneDef[] = [
     label: 'Viewer',
     icon: 'monitor',
     Comp: ViewerPane,
-    keys: ['defaultQuality', 'viewerBg', 'pixelZoom', 'compareDefault', 'fitOnChange'],
+    keys: ['defaultQuality', 'viewerBg', 'pixelZoom', 'compareDefault', 'fitOnChange', 'compareLayout', 'scopesDefault', 'scopesType', 'pixelReadout', 'eyedropperSize', 'clipLow', 'clipHigh', 'presetThumbSize'],
     help: [
       'Preview quality is the resolution the viewer renders at; lower is faster on large images. Export always renders at full resolution.',
       'The background fills the viewer around the image. The checkerboard makes it easy to see the image edges.',
       'With sharp pixels on, zooming in past 100% shows individual pixels instead of a smoothed image.',
+      'Scopes, the pixel readout, clipping indicators and the channel view are in the viewer toolbar and View menu. Clipping marks pixels at or beyond the thresholds: blue for crushed shadows, red for blown highlights.',
     ],
   },
   {
@@ -92,6 +94,18 @@ const PANES: PaneDef[] = [
       'Data plugins add shader nodes and presets and are always safe. Code plugins are JavaScript modules; turn them off to block installing any.',
       'AI nodes download their neural-network models once and keep them in the browser’s cache. Delete them here to free disk space.',
       'With WebGPU preferred, AI models run on the graphics card when the browser supports it, and on the CPU otherwise.',
+    ],
+  },
+  {
+    id: 'generation',
+    label: 'Generation',
+    icon: 'artwork',
+    Comp: GenerationPane,
+    keys: ['genServer', 'genUrlComfy', 'genUrlA1111'],
+    help: [
+      'Generate (Stable Diffusion) nodes send a job to your own ComfyUI or AUTOMATIC1111 / Forge server and show the result. It is off by default.',
+      'Nothing is sent until you choose a server here and press Generate on a node. Then the prompts and the images connected to that node go to this URL only.',
+      'The server must allow requests from Darkroom (CORS). Test Connection lists its checkpoints and ControlNet models. Help › ControlNet has the launch commands.',
     ],
   },
   {

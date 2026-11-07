@@ -4,7 +4,9 @@ import type { Tex } from '../core/gl';
 import type { Graph } from '../core/types';
 import { effectiveViewed, useDoc } from './doc';
 import { useUi, type Quality } from './ui';
-import { currentPrefs, previewCapScale } from './settings';
+import { currentPrefs, previewCapScale, useSettings } from './settings';
+import { CHANNEL_INDEX, useViewer } from './viewer';
+import { copyTexture } from '../core/readback';
 
 /**
  * The engine singleton. Lives outside React: it owns a canvas which the
@@ -107,7 +109,7 @@ function renderNow() {
   const target = effectiveViewed(doc);
   const cw = viewerCanvas.width;
   const ch = viewerCanvas.height;
-  if (!cw || !ch) return;
+  if (cw < 64 || ch < 64) return; // collapsed / mid-layout viewer: nothing useful to render
 
   // Estimate the display zoom (needs the node's full size: use last frame's or the project size).
   let fw = lastFull.w;
@@ -118,10 +120,12 @@ function renderNow() {
     fh = ps.height;
   }
   const zoom = ui.fit ? fitZoomFor(fw, fh) : ui.zoom;
-  const scale = Math.min(ui.quality === 'full' ? 1 : Math.min(1, quantize(Math.min(1, zoom) * QUALITY_FACTOR[ui.quality])), previewCapScale(fw, fh)); // cap: Preferences › Performance
+  // never preview below a 256 px long edge: tiny transient zooms would otherwise start (and abandon) AI jobs
+  const floor = quantize(Math.min(1, 256 / Math.max(fw, fh, 1)));
+  const scale = Math.max(floor, Math.min(ui.quality === 'full' ? 1 : Math.min(1, quantize(Math.min(1, zoom) * QUALITY_FACTOR[ui.quality])), previewCapScale(fw, fh))); // cap: Preferences › Performance
   previewScale = scale;
   // AI / heavy nodes stay at the fit-to-window preview resolution while zooming (see RenderOptions.heavyScale).
-  const fitScale = Math.min(1, quantize(Math.min(1, fitZoomFor(fw, fh)) * QUALITY_FACTOR[ui.quality]), previewCapScale(fw, fh));
+  const fitScale = Math.max(floor, Math.min(1, quantize(Math.min(1, fitZoomFor(fw, fh)) * QUALITY_FACTOR[ui.quality]), previewCapScale(fw, fh)));
   const heavyScale = ui.quality === 'full' || currentPrefs().aiFollowZoom ? undefined : fitScale;
 
   let res;
@@ -137,11 +141,10 @@ function renderNow() {
     lastFull = { w: res.fullWidth, h: res.fullHeight };
     if (!first || ui.fit) requestRender(); // re-run with the right size
   }
+  const vw = useViewer.getState();
+  const comparing = (ui.compare || vw.hold) && !!target;
   let cmp: Tex | null = null;
-  if (ui.compare && target) {
-    const src = compareSource(graph, target);
-    if (src && src !== target) cmp = eng.render(graph, { nodeId: src, scale }).tex;
-  }
+  if (comparing) cmp = compareTexture(graph, target!, scale, heavyScale);
   const z = ui.fit ? fitZoomFor(res.fullWidth || fw, res.fullHeight || fh) : ui.zoom;
   const w = (res.fullWidth || fw) * z;
   const h = (res.fullHeight || fh) * z;
@@ -149,24 +152,33 @@ function renderNow() {
   const panY = ui.fit ? 0 : ui.panY;
   const x = cw / 2 + panX - w / 2;
   const y = ch / 2 + panY - h / 2;
-  eng.present(res.tex, {
+  presented = { tex: res.tex, ref: comparing ? cmp : null, target: target ?? null, fullW: res.fullWidth, fullH: res.fullHeight };
+  const ref = cmp ?? res.tex;
+  const mode = vw.hold ? 'full' : vw.compareMode === 'toggle' ? null : vw.compareMode;
+  const prefs = useSettings.getState();
+  eng.present(vw.swap && mode && mode !== 'full' && ref ? ref : res.tex, {
     rect: { x, y, w, h },
-    compare: ui.compare ? (cmp ?? res.tex) : null,
-    split: ui.split * cw,
+    compare: comparing && mode ? (vw.swap && mode !== 'full' ? res.tex : ref) : null,
+    compareMode: mode ?? undefined,
+    split: mode === 'v' ? vw.splitY * ch : ui.split * cw,
     pixelated: z > 1.001,
     background: BG,
+    channel: CHANNEL_INDEX[vw.channel],
+    clip: vw.clip ? { lo: (prefs.clipLow + 0.5) / 255, hi: (prefs.clipHigh - 0.5) / 255 } : null,
   });
 
   // publish stats (only when changed to avoid needless React work)
   const errors: Record<string, string> = {};
   const pending: string[] = [];
   for (const [k, v] of eng.errors) {
+    if (k.includes(PREVIEW_PREFIX)) continue; // the preset browser's temporary nodes
     if (v.startsWith('[pending]')) pending.push(k);
     else errors[k] = v;
   }
   const prev = useUi.getState();
   const patch: Partial<typeof prev> = {
-    renderMs: Math.round(res.ms * 10) / 10,
+    // a fully cached frame keeps showing the last real render's cost
+    ...(res.evaluated > 0 ? { renderMs: Math.round(res.ms * 10) / 10, renderNodes: res.evaluated } : {}),
     fullWidth: res.fullWidth,
     fullHeight: res.fullHeight,
     renderScale: res.scale,
@@ -181,6 +193,46 @@ function renderNow() {
 }
 
 const BG: [number, number, number] = [0.235, 0.235, 0.24];
+
+/** Node-id prefix of temporary preview nodes (preset browser); their errors stay out of the status bar. */
+export const PREVIEW_PREFIX = '__pb_';
+
+/** What the viewer showed last frame (pixel readout, scopes, snapshot). Valid until the next render. */
+export let presented: { tex: Tex | null; ref: Tex | null; target: string | null; fullW: number; fullH: number } = {
+  tex: null,
+  ref: null,
+  target: null,
+  fullW: 0,
+  fullH: 0,
+};
+
+/** Owned copy of a viewer frame for "compare with snapshot". */
+let snapshotTex: Tex | null = null;
+
+/** The comparison image for `target` per Viewer › Compare › Reference. */
+function compareTexture(graph: Graph, target: string, scale: number, heavyScale?: number): Tex | null {
+  const vw = useViewer.getState();
+  if (vw.compareRef === 'snapshot' && snapshotTex) return snapshotTex;
+  if (vw.compareRef === 'pinned' && vw.pinned && vw.pinned.id !== target) {
+    const r = eng!.render(graph, { nodeId: vw.pinned.id, scale, heavyScale });
+    if (r.tex) return r.tex;
+  }
+  const src = compareSource(graph, target);
+  return src && src !== target ? eng!.render(graph, { nodeId: src, scale }).tex : null;
+}
+
+/** Copy the current viewer frame as the compare snapshot. False if nothing is shown. */
+export function takeSnapshot(): boolean {
+  if (!eng || !presented.tex) return false;
+  const copy = copyTexture(eng.gl, presented.tex);
+  if (snapshotTex) eng.gl.destroy(snapshotTex);
+  snapshotTex = copy;
+  return true;
+}
+export function clearSnapshot() {
+  if (eng && snapshotTex) eng.gl.destroy(snapshotTex);
+  snapshotTex = null;
+}
 
 /** Current display rect of the image in canvas device px (for hit-testing in the viewer). */
 export function imageRect() {
@@ -202,6 +254,23 @@ export function resetRenderSize() {
 // Re-render whenever something render-relevant changes.
 useDoc.subscribe((s, p) => {
   if (s.project.graph !== p.project.graph || s.viewed !== p.viewed || s.project.outputNode !== p.project.outputNode) requestRender();
+});
+useViewer.subscribe((s, p) => {
+  if (
+    s.channel !== p.channel ||
+    s.clip !== p.clip ||
+    s.compareMode !== p.compareMode ||
+    s.swap !== p.swap ||
+    s.splitY !== p.splitY ||
+    s.hold !== p.hold ||
+    s.compareRef !== p.compareRef ||
+    s.pinned !== p.pinned ||
+    s.snapshot !== p.snapshot
+  )
+    requestRender();
+});
+useSettings.subscribe((s, p) => {
+  if (s.clipLow !== p.clipLow || s.clipHigh !== p.clipHigh) requestRender();
 });
 useUi.subscribe((s, p) => {
   if (s.fit !== p.fit || s.zoom !== p.zoom || s.panX !== p.panX || s.panY !== p.panY || s.compare !== p.compare || s.split !== p.split || s.quality !== p.quality)

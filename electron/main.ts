@@ -223,7 +223,30 @@ function createWindow() {
   };
   w.on('resize', remember);
   w.on('move', remember);
-  w.on('close', remember);
+  w.on('close', (e) => {
+    remember();
+    if (closeOk.has(w) || !edited.get(w) || !rendererReady) return;
+    e.preventDefault();
+    void (async () => {
+      const name = w.getTitle() || 'Untitled';
+      // test hook (like DARKROOM_TEST_DIALOG_PATH): 'save' | 'cancel' | 'discard'
+      const forced = { save: 0, cancel: 1, discard: 2 }[process.env.DARKROOM_TEST_CLOSE_CHOICE ?? ''];
+      const r = forced !== undefined ? { response: forced } : await dialog.showMessageBox(w, {
+        type: 'warning',
+        buttons: ['Save', 'Cancel', 'Don’t Save'],
+        defaultId: 0,
+        cancelId: 1,
+        message: `Do you want to save the changes you made to “${name}”?`,
+        detail: 'Your changes will be lost if you don’t save them. (The last session is also kept as an autosave.)',
+      });
+      if (r.response === 1) {
+        quitting = false; // a cancelled close also cancels a pending ⌘Q
+        return;
+      }
+      if (r.response === 2) return closeNow(w);
+      w.webContents.send(IPC.saveBeforeClose); // renderer saves, then replies via closeAfterSave
+    })();
+  });
   w.on('closed', () => {
     if (win === w) win = null;
   });
@@ -356,6 +379,54 @@ async function writeAtomic(file: string, data: string | Uint8Array) {
 const PROJECT_FILTER: FileFilter[] = [{ name: 'Darkroom Project', extensions: ['darkroom'] }];
 const safeFileName = (s: string) => s.replace(/[/\\:*?"<>|]+/g, '').trim() || 'Untitled';
 
+// --- closing with unsaved changes -----------------------------------------
+const edited = new WeakMap<BrowserWindow, boolean>();
+const closeOk = new WeakSet<BrowserWindow>();
+let quitting = false;
+app.on('before-quit', () => (quitting = true));
+function closeNow(w: BrowserWindow) {
+  closeOk.add(w);
+  w.close();
+  if (quitting) app.quit();
+}
+
+// --- Stable Diffusion bridge: relax CORS for exactly the configured server ---
+/** Set by the renderer (Preferences › Generation); null = generation off, nothing is rewritten. */
+let genOrigin: URL | null = null;
+const toHttp = (p: string) => (p === 'ws:' ? 'http:' : p === 'wss:' ? 'https:' : p);
+function isGenServer(url: string) {
+  if (!genOrigin) return false;
+  try {
+    const u = new URL(url);
+    return toHttp(u.protocol) === genOrigin.protocol && u.host === genOrigin.host;
+  } catch {
+    return false;
+  }
+}
+/**
+ * ComfyUI rejects foreign Origins and neither ComfyUI nor A1111 send CORS headers by default, so the
+ * app:// renderer could not talk to a stock local server. For requests to the user's configured
+ * server only: drop Origin/Referer, answer preflights, and add permissive CORS response headers.
+ */
+function installGenServerCors() {
+  const wr = session.defaultSession.webRequest;
+  wr.onBeforeSendHeaders((d, cb) => {
+    if (!isGenServer(d.url)) return cb({});
+    const h = { ...d.requestHeaders };
+    for (const k of Object.keys(h)) if (/^(origin|referer)$/i.test(k)) delete h[k];
+    cb({ requestHeaders: h });
+  });
+  wr.onHeadersReceived((d, cb) => {
+    if (!isGenServer(d.url)) return cb({});
+    const h: Record<string, string[]> = { ...(d.responseHeaders ?? {}) };
+    for (const k of Object.keys(h)) if (/^access-control-/i.test(k)) delete h[k];
+    h['Access-Control-Allow-Origin'] = ['*'];
+    h['Access-Control-Allow-Methods'] = ['GET, POST, DELETE, OPTIONS'];
+    h['Access-Control-Allow-Headers'] = ['Content-Type, Authorization'];
+    cb({ responseHeaders: h, ...(d.method === 'OPTIONS' ? { statusLine: 'HTTP/1.1 204 No Content' } : {}) });
+  });
+}
+
 function registerIpc() {
   ipcMain.on(IPC.appVersion, (e) => (e.returnValue = app.getVersion()));
 
@@ -409,6 +480,7 @@ function registerIpc() {
   ipcMain.on(IPC.setDocument, (e, doc: { title: string; path: string | null; edited: boolean }) => {
     const w = BrowserWindow.fromWebContents(e.sender);
     if (!w) return;
+    edited.set(w, !!doc.edited);
     w.setTitle(doc.path ? path.basename(doc.path) : doc.title || 'Darkroom');
     if (isMac) {
       w.setRepresentedFilename(doc.path && existsSync(doc.path) ? doc.path : '');
@@ -434,6 +506,19 @@ function registerIpc() {
     if (EDIT_ROLES.includes(role)) e.sender[role]();
   });
 
+  ipcMain.on(IPC.closeAfterSave, (e, saved: boolean) => {
+    const w = BrowserWindow.fromWebContents(e.sender);
+    if (!w) return;
+    if (saved) closeNow(w);
+    else quitting = false; // save was cancelled: stay open
+  });
+  ipcMain.on(IPC.setGenServer, (_e, url: string | null) => {
+    try {
+      genOrigin = url ? new URL(url) : null;
+    } catch {
+      genOrigin = null;
+    }
+  });
   ipcMain.on(IPC.ready, (e) => {
     if (win && e.sender === win.webContents) {
       rendererReady = true;
@@ -545,6 +630,7 @@ const ALLOWED_PERMISSIONS = new Set(['media', 'clipboard-read', 'clipboard-sanit
 void app.whenReady().then(() => {
   registerAppProtocol();
   registerIpc();
+  installGenServerCors();
   fallbackMenu();
   session.defaultSession.setPermissionRequestHandler((_wc, perm, cb) => cb(ALLOWED_PERMISSIONS.has(perm)));
   session.defaultSession.setPermissionCheckHandler((_wc, perm) => ALLOWED_PERMISSIONS.has(perm));

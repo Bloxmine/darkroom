@@ -205,6 +205,10 @@ const SHORTCUT_GROUPS: { title: string; ids: string[] }[] = [
   { title: 'Nodes & Groups', ids: ['node.add', 'node.bypass', 'node.view', 'node.viewOutput', 'edit.group', 'edit.ungroup', 'edit.enterGroup', 'edit.exitGroup'] },
   { title: 'View', ids: ['view.fitGraph', 'view.fitImage', 'view.actual', 'view.zoomIn', 'view.zoomOut', 'view.compare', 'view.library', 'view.properties'] },
   { title: 'Playback', ids: ['playback.toggle', 'playback.prevFrame', 'playback.nextFrame', 'file.exportVideo'] },
+  {
+    title: 'Viewer',
+    ids: ['view.fill', 'view.scopes', 'view.readout', 'view.clip', 'view.channel.rgb', 'view.channel.r', 'view.channel.g', 'view.channel.b', 'view.channel.a', 'view.channel.luma', 'view.snapshot', 'view.pinCompare', 'view.presetBrowser'],
+  },
 ];
 
 function ShortcutsDialog() {
@@ -228,6 +232,7 @@ function ShortcutsDialog() {
               <tbody>
                 {g.ids.map((id) => {
                   const c = commands[id];
+                  if (!c) return null;
                   return (
                     <tr key={id}>
                       <td>
@@ -276,6 +281,22 @@ function ShortcutsDialog() {
               <tr>
                 <td>Viewer: fit</td>
                 <td>Double-click</td>
+              </tr>
+              <tr>
+                <td>Viewer: pan over a tool</td>
+                <td>Space+drag</td>
+              </tr>
+              <tr>
+                <td>Viewer: show compare reference</td>
+                <td>Hold \</td>
+              </tr>
+              <tr>
+                <td>Viewer: colour sampler (max 4)</td>
+                <td>Shift-click · Alt-click removes</td>
+              </tr>
+              <tr>
+                <td>Play / pause (in motion)</td>
+                <td>Tap Space</td>
               </tr>
               <tr>
                 <td>Parameter: reset / expose</td>

@@ -1,0 +1,476 @@
+/* Node-graph editor extras: frames & sticky notes, colour tags, collapsed nodes,
+   insert-on-wire / rewire / knife feedback, minimap dock, quick-add & library
+   favourites, Save as Preset dialog. Colours come only from the theme tokens below
+   (and the shared --face/--text/--sel… tokens of each theme). */
+
+:root {
+  /* colour tags (node headers, frames) */
+  --tag-red: #c8483d;
+  --tag-orange: #d98428;
+  --tag-yellow: #d9b52c;
+  --tag-green: #4e9446;
+  --tag-teal: #2e948f;
+  --tag-blue: #4677c8;
+  --tag-purple: #8457c2;
+  --tag-pink: #c95b95;
+  --tag-grey: #8a8a8a;
+  /* frames */
+  --fr-fill: 20%;
+  --fr-edge: 70%;
+  --fr-head: 72%;
+  --fr-text: #ffffff;
+  --fr-text-shadow: 0 1px 0 rgba(0, 0, 0, 0.55);
+  --fr-note-text: #f2f2f2;
+  --fr-radius: 0;
+  --fr-paper: #fffbe0;
+  --fr-paper-mix: 55%;
+  --fr-sticky-text: #2b2410;
+  --fr-sticky-shadow: 2px 2px 0 rgba(0, 0, 0, 0.28);
+  /* feedback */
+  --ge-insert: #7cff6a;
+  --ge-knife: #ff4b3a;
+  --ge-btn: var(--face);
+  --ge-btn-border: var(--dk);
+  --ge-star-on: 1;
+}
+
+[data-theme='aperture'] {
+  --tag-red: #b8473e;
+  --tag-orange: #c27a2c;
+  --tag-yellow: #bf9f2e;
+  --tag-green: #4f8a47;
+  --tag-teal: #2f8782;
+  --tag-blue: #3f6fbf;
+  --tag-purple: #7a55b0;
+  --tag-pink: #b25686;
+  --tag-grey: #6f6f6f;
+  --fr-fill: 16%;
+  --fr-edge: 55%;
+  --fr-head: 60%;
+  --fr-note-text: #d6d6d6;
+  --fr-radius: 7px;
+  --fr-paper: #d8d2b8;
+  --fr-paper-mix: 70%;
+  --fr-sticky-text: #1e1a0c;
+  --fr-sticky-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --ge-insert: #6fb8ff;
+  --ge-btn: #2d2d2d;
+  --ge-btn-border: #111;
+}
+
+[data-theme='aqua'] {
+  --tag-red: #d4524a;
+  --tag-orange: #e58e34;
+  --tag-yellow: #e2bf34;
+  --tag-green: #59a84f;
+  --tag-teal: #36a39e;
+  --tag-blue: #4f86d8;
+  --tag-purple: #9466d0;
+  --tag-pink: #d867a3;
+  --tag-grey: #969aa0;
+  --fr-fill: 24%;
+  --fr-edge: 75%;
+  --fr-head: 78%;
+  --fr-note-text: #1d1d1d;
+  --fr-text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.3);
+  --fr-radius: 7px;
+  --fr-paper: #fffbe6;
+  --fr-paper-mix: 45%;
+  --fr-sticky-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  --ge-insert: #1f7cf0;
+  --ge-btn: #eceef1;
+  --ge-btn-border: #8d9298;
+}
+
+/* --- frames & sticky notes ----------------------------------------------- */
+.react-flow__node.rf-frame {
+  pointer-events: none; /* the body lets box-selection and clicks through to the canvas */
+}
+.react-flow__node.rf-frame :is(.fr-head, .fr-note, .react-flow__resize-control) {
+  pointer-events: all;
+}
+.fr {
+  --fr: var(--tag-blue);
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: color-mix(in srgb, var(--fr) var(--fr-fill), transparent);
+  border: 1px solid color-mix(in srgb, var(--fr) var(--fr-edge), transparent);
+  border-radius: var(--fr-radius);
+  overflow: hidden;
+}
+.fr.selected {
+  box-shadow: 0 0 0 2px var(--sel);
+}
+.fr-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  background: color-mix(in srgb, var(--fr) var(--fr-head), transparent);
+  color: var(--fr-text);
+  text-shadow: var(--fr-text-shadow);
+  font-weight: bold;
+  font-size: 12px;
+  cursor: grab;
+  white-space: nowrap;
+}
+.fr-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fr-title-input {
+  width: 100%;
+  font: inherit;
+  color: var(--text);
+  background: var(--field);
+  border: 1px solid var(--sel);
+  padding: 0 3px;
+  text-shadow: none;
+}
+.fr-note {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 5px 8px;
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  overflow: hidden;
+  color: var(--fr-note-text);
+  cursor: text;
+}
+.fr-placeholder {
+  opacity: 0.6;
+  font-style: italic;
+}
+.fr-note-input {
+  display: block;
+  width: 100%;
+  min-height: 60px;
+  height: 100%;
+  font: inherit;
+  color: var(--text);
+  background: var(--field);
+  border: 1px solid var(--sel);
+  resize: none;
+}
+/* sticky notes: opaque paper in the note colour */
+.fr-sticky {
+  background: color-mix(in srgb, var(--fr) var(--fr-paper-mix), var(--fr-paper));
+  border-color: color-mix(in srgb, var(--fr) 80%, var(--dk));
+  box-shadow: var(--fr-sticky-shadow);
+}
+.fr-sticky.selected {
+  box-shadow: 0 0 0 2px var(--sel), var(--fr-sticky-shadow);
+}
+.fr-sticky .fr-head {
+  height: 20px;
+  font-size: 11px;
+  background: color-mix(in srgb, var(--fr) 85%, var(--dk));
+}
+.fr-sticky .fr-note {
+  flex: 1;
+  align-self: stretch;
+  color: var(--fr-sticky-text);
+}
+.react-flow__resize-control.handle.fr-resize-handle {
+  width: 8px;
+  height: 8px;
+  background: var(--sel);
+  border: 1px solid var(--sel-text);
+  border-radius: 1px;
+}
+.react-flow__resize-control.line.fr-resize-line {
+  border-color: transparent;
+}
+
+/* --- nodes: collapse, rename, mute icon ---------------------------------- */
+.dn-icon {
+  display: inline-flex;
+  flex: none;
+}
+.dn-icon.mutable {
+  cursor: pointer;
+}
+.dn-icon.mutable:hover {
+  filter: brightness(1.25) drop-shadow(0 0 2px var(--sel-text));
+}
+.dn-rename {
+  flex: 1;
+  min-width: 0;
+  height: 16px;
+  padding: 0 3px;
+  font: inherit;
+  font-weight: normal;
+  color: var(--text);
+  background: var(--field);
+  border: 1px solid var(--sel);
+  text-shadow: none;
+}
+.dn-collapse {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-right: -3px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.75;
+  position: relative;
+}
+.dn-collapse::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 4px;
+  border: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  border-bottom: none;
+}
+.dn-collapse.closed::before {
+  left: 5px;
+  top: 3px;
+  border: 4px solid transparent;
+  border-left: 5px solid currentColor;
+  border-right: none;
+}
+.dn-collapse:hover {
+  opacity: 1;
+}
+.dn.collapsed .dn-title {
+  position: relative;
+  border-bottom: none;
+}
+.dn.collapsed .dn-title,
+[data-theme] .dn.collapsed .dn-title {
+  border-radius: inherit;
+}
+.dn.collapsed::after {
+  display: none;
+}
+.dn-title .react-flow__handle.dh {
+  top: 50%;
+}
+
+/* --- wires ---------------------------------------------------------------- */
+.react-flow .react-flow__edge.edge-insert .react-flow__edge-path {
+  stroke: var(--ge-insert);
+  stroke-width: 4;
+  stroke-dasharray: none;
+}
+.react-flow__node.rf-inserting .dn {
+  box-shadow: 0 0 0 2px var(--ge-insert), 0 0 14px var(--ge-insert);
+}
+.react-flow .react-flow__edge.edge-detached {
+  display: none;
+}
+.knife-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 20;
+}
+.knife-overlay polyline {
+  fill: none;
+  stroke: var(--ge-knife);
+  stroke-width: 2;
+  stroke-dasharray: 6 3;
+}
+
+/* --- minimap dock --------------------------------------------------------- */
+.react-flow .minimap.mm-bottom {
+  margin-bottom: 46px;
+}
+.react-flow .minimap.mm-top {
+  margin-top: 46px;
+}
+.mm-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  padding: 0;
+  background: var(--ge-btn);
+  border: 1px solid var(--ge-btn-border);
+  border-radius: var(--fr-radius);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  opacity: 0.8;
+}
+.mm-toggle:hover {
+  opacity: 1;
+}
+.mm-toggle:not(.on) img {
+  opacity: 0.55;
+  filter: grayscale(1);
+}
+.mm-toggle.on {
+  box-shadow: inset 0 0 0 1px var(--sel), 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* --- panel header tools --------------------------------------------------- */
+.graph-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+.graph-tools .panel-meta {
+  margin-left: 6px;
+}
+
+/* --- quick add ------------------------------------------------------------ */
+.quickadd.window {
+  width: 360px;
+}
+.quickadd .qa-list {
+  height: 320px;
+}
+.quickadd .qa-list .qa-item {
+  height: auto;
+  min-height: 30px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+.qa-cat .icon {
+  vertical-align: -3px;
+  width: 12px;
+  height: 12px;
+}
+.qa-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+.qa-text .qa-name {
+  flex: none;
+}
+.qa-desc {
+  font-size: 10px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qa-item.active .qa-desc {
+  color: inherit;
+  opacity: 0.8;
+}
+.qa-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qa-meta .icon {
+  width: 12px;
+  height: 12px;
+}
+.qa-star,
+.lib-star {
+  flex: none;
+  display: inline-flex;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+}
+.qa-item:hover .qa-star,
+.qa-item.active .qa-star,
+.tree-leaf:hover .lib-star,
+.qa-star.on,
+.lib-star.on {
+  opacity: 1;
+}
+.qa-star:not(.on) img,
+.lib-star:not(.on) img {
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+.quickadd .qa-foot {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+.qa-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  flex: none;
+}
+
+/* --- library -------------------------------------------------------------- */
+.tree-leaf .lib-name {
+  flex: 1;
+}
+.tree-leaf .lib-star {
+  margin-left: auto;
+}
+.lib-rename {
+  flex: 1;
+  min-width: 0;
+  height: 16px;
+}
+.lib-info-thumb {
+  display: block;
+  max-width: 100%;
+  max-height: 96px;
+  margin: 4px 0;
+  border: 1px solid var(--line);
+}
+
+/* --- Save as Preset dialog ------------------------------------------------- */
+.sp-form {
+  display: flex;
+  gap: 10px;
+}
+.sp-thumb {
+  flex: none;
+  width: 128px;
+  height: 128px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--field);
+}
+.sp-thumb img {
+  max-width: 100%;
+  max-height: 100%;
+}
+.sp-fields {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sp-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sp-fields .field {
+  width: 100%;
+}
+.sp-fields textarea.field {
+  resize: vertical;
+  font: inherit;
+}
+.sp-hint {
+  margin: 10px 0 0;
+  font-size: 10px;
+}
+.sp-hint .icon {
+  vertical-align: -3px;
+}

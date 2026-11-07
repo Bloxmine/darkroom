@@ -9,6 +9,7 @@
 import jsepWasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.jsep.wasm?url';
 import cpuWasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?url';
 import { deleteCached, fetchCached, listCached } from './cache';
+import { approve, ensureConsent } from './consent';
 import { MODELS, pickFile, type ModelFile, type Precision } from './models';
 import { createHost, type AiRequest, type AiResponse, type Ep, type InitResult, type LoadResult, type RunResult, type TensorData } from './session';
 
@@ -94,6 +95,7 @@ function post(msg: string, kind: 'info' | 'error' = 'info') {
 
 /** Cache-first download with progress in the AI toast / AI Models panel (also used by the MediaPipe runtime). */
 export async function download(label: string, url: string, expected = 0) {
+  await ensureConsent(url, label, expected);
   setDownload(url, { label, loaded: 0, total: expected, done: false, error: undefined });
   let last = 0;
   try {
@@ -341,6 +343,7 @@ export async function clearModelCache(url?: string) {
 export const prefetchModel = (id: string) => {
   const m = MODELS[id];
   const f = m?.files[0];
+  approve(...(m?.files ?? []).map((x) => x.url)); // an explicit Download click is consent
   return (m?.external && f ? download(`${m.name}`, f.url, f.bytes) : ensureModel(id)).then(() => refreshCached());
 };
 

@@ -1,0 +1,654 @@
+/* Viewer pro tools: compare handle, readout, samplers, eyedropper, scopes, preset browser.
+   Chrome uses the theme tokens (classic / aperture / aqua); the scope plots use --scope-* below. */
+
+/* --- scope plot palette (per theme) ------------------------------------------------- */
+:root {
+  /* classic: an analogue-scope look, phosphor green on near-black */
+  --scope-bg: #0a0c0a;
+  --scope-grid: rgba(170, 200, 150, 0.2);
+  --scope-grid-strong: rgba(185, 215, 160, 0.5);
+  --scope-text: #9fb592;
+  --scope-trace: #b6f0a0;
+  --scope-skin: #e3a06c;
+  --scope-target: #d8c47a;
+  --scope-font: var(--mono);
+}
+[data-theme='aperture'] {
+  --scope-bg: #111111;
+  --scope-grid: rgba(255, 255, 255, 0.11);
+  --scope-grid-strong: rgba(255, 255, 255, 0.34);
+  --scope-text: #9a9a9a;
+  --scope-trace: #e6e6e6;
+  --scope-skin: #d99a6c;
+  --scope-target: #c9b26b;
+}
+[data-theme='aqua'] {
+  --scope-bg: #161b22;
+  --scope-grid: rgba(150, 185, 230, 0.17);
+  --scope-grid-strong: rgba(165, 200, 245, 0.45);
+  --scope-text: #a3b5cb;
+  --scope-trace: #dcefff;
+  --scope-skin: #eaa679;
+  --scope-target: #96bdf5;
+}
+
+/* --- layout ------------------------------------------------------------------------- */
+.vx-main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+}
+.vx-main > .viewer-host {
+  min-width: 0;
+}
+.viewer-host.eyedrop,
+.vx-eyedrop {
+  cursor: url('/icons/fatcow/16x16/color_picker.png') 1 15, crosshair;
+}
+
+/* toolbar dropdown buttons */
+.viewer-toolbar .tbtn.vx-menubtn {
+  width: auto;
+  min-width: 14px;
+  padding: 0 3px;
+  gap: 2px;
+}
+.vx-menubtn-label {
+  font-size: 10px;
+  font-weight: bold;
+  min-width: 26px;
+  text-align: left;
+}
+.vx-caret {
+  font-size: 8px;
+  opacity: 0.75;
+}
+
+/* --- compare split handle ---------------------------------------------------------- */
+.vx-split {
+  position: absolute;
+  z-index: 3;
+  touch-action: none;
+}
+.vx-split-h {
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  margin-left: -12px;
+  cursor: ew-resize;
+}
+.vx-split-v {
+  left: 0;
+  right: 0;
+  height: 24px;
+  margin-top: -12px;
+  cursor: ns-resize;
+}
+.vx-split-line {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.vx-split-h .vx-split-line {
+  left: 11.5px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+.vx-split-v .vx-split-line {
+  top: 11.5px;
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+.vx-split-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 30px;
+  height: 30px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 35% 30%, #ffffff, #d9d9d9 55%, #a9a9a9);
+  border: 1px solid rgba(0, 0, 0, 0.55);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transition: transform 0.08s;
+}
+.vx-split:hover .vx-split-knob,
+.vx-split.dragging .vx-split-knob {
+  transform: translate(-50%, -50%) scale(1.12);
+}
+.vx-split-arrows {
+  font-size: 8px;
+  letter-spacing: -1px;
+  color: #333;
+  line-height: 1;
+}
+.vx-split-v .vx-split-arrows {
+  writing-mode: horizontal-tb;
+  display: flex;
+  flex-direction: column;
+  letter-spacing: 0;
+}
+.vx-split-tag {
+  position: absolute;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: bold;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 9px;
+  pointer-events: none;
+}
+.vx-split-h .vx-split-tag {
+  top: 8px;
+}
+.vx-split-h .vx-split-tag.first {
+  right: 20px;
+}
+.vx-split-h .vx-split-tag.second {
+  left: 20px;
+}
+.vx-split-v .vx-split-tag {
+  left: 8px;
+}
+.vx-split-v .vx-split-tag.first {
+  bottom: 20px;
+}
+.vx-split-v .vx-split-tag.second {
+  top: 20px;
+}
+.vx-compare-flag,
+.vx-flag {
+  position: absolute;
+  z-index: 3;
+  padding: 2px 9px;
+  font-size: 10px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 10px;
+  pointer-events: none;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.vx-compare-flag {
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.vx-compare-flag kbd {
+  font-family: var(--mono);
+  padding: 0 4px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 3px;
+}
+.vx-flag {
+  right: 8px;
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.vx-flag-channel {
+  top: 8px;
+}
+.vx-flag-clip {
+  top: 30px;
+  background: linear-gradient(90deg, rgba(40, 90, 255, 0.75), rgba(230, 40, 40, 0.75));
+}
+
+/* --- readout chip ------------------------------------------------------------------ */
+.vx-readout {
+  position: absolute;
+  z-index: 4;
+  left: 8px;
+  bottom: 8px;
+  max-width: calc(100% - 16px);
+  padding: 3px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font: 10.5px/1.45 var(--mono);
+  color: #e9e9e9;
+  background: rgba(14, 14, 14, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 5px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  overflow: hidden;
+}
+.vx-readout .muted {
+  color: #9b9b9b;
+}
+.vx-ro-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 9px;
+  white-space: nowrap;
+}
+.vx-ro-row + .vx-ro-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 1px;
+}
+.vx-ro-empty,
+.vx-ro-hint {
+  white-space: normal;
+}
+.vx-ro-hint {
+  color: #ffd27a;
+  font-family: var(--font);
+}
+.vx-ro-label {
+  display: inline-flex;
+  width: 22px;
+  justify-content: center;
+  color: #bbb;
+}
+.vx-ro-num {
+  font-weight: bold;
+  color: #ffd27a;
+}
+.vx-ro-swatch {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+.vx-ro-pos {
+  min-width: 82px;
+  color: #fff;
+}
+.vx-ro-rgb i {
+  font-style: normal;
+  color: #9a9a9a;
+  margin-right: 2px;
+}
+.vx-ro-rgb i.r {
+  color: #ff7a72;
+}
+.vx-ro-rgb i.g {
+  color: #7ee08a;
+}
+.vx-ro-rgb i.b {
+  color: #86a6ff;
+}
+.vx-ro-rgb {
+  min-width: 158px;
+}
+.vx-ro-f,
+.vx-ro-l,
+.vx-ro-hsl {
+  color: #b9b9b9;
+}
+.vx-ro-hex {
+  color: #fff;
+}
+.vx-ro-x {
+  margin-left: auto;
+  padding: 0 4px;
+  color: #ccc;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+.vx-ro-x:hover {
+  color: #fff;
+}
+
+/* --- samplers ------------------------------------------------------------------------ */
+.vx-samplers {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 3;
+  pointer-events: none;
+  overflow: visible;
+}
+.vx-sampler {
+  pointer-events: auto;
+  cursor: move;
+}
+.vx-sampler .vx-sampler-hit {
+  fill: transparent;
+}
+.vx-sampler .vx-sampler-ring {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.9));
+}
+.vx-sampler line {
+  stroke: #fff;
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.9));
+}
+.vx-sampler text {
+  fill: #ffd27a;
+  font: bold 11px var(--font);
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.85);
+  stroke-width: 3px;
+}
+
+/* --- eyedropper ---------------------------------------------------------------------- */
+.vx-eyedrop {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  background: rgba(255, 210, 120, 0.04);
+  box-shadow: inset 0 0 0 2px rgba(255, 196, 80, 0.75);
+}
+.vx-eyedrop-btn {
+  margin-left: 4px;
+}
+.cp-eyedrop {
+  align-self: center;
+}
+
+/* --- scopes -------------------------------------------------------------------------- */
+.vx-scopes {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--face);
+  color: var(--text);
+}
+.vx-scopes.docked {
+  flex: none;
+  border-left: 1px solid var(--line);
+}
+.vx-scopes.floating {
+  position: fixed;
+  z-index: 900;
+  resize: both;
+  overflow: hidden;
+  min-width: 220px;
+  min-height: 180px;
+}
+.vx-scopes-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 25px;
+  padding: 0 4px;
+  flex: none;
+  border-bottom: 1px solid var(--line);
+}
+.vx-scopes.floating .vx-scopes-head {
+  cursor: move;
+  background: var(--title-grad);
+  color: #fff;
+}
+.vx-seg {
+  display: inline-flex;
+  border: 1px solid var(--lo);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.vx-seg button {
+  font: 10px var(--font);
+  padding: 1px 6px;
+  height: 18px;
+  color: var(--text);
+  background: var(--face-2);
+  border: 0;
+  border-right: 1px solid var(--lo);
+  cursor: default;
+}
+.vx-seg button:last-child {
+  border-right: 0;
+}
+.vx-seg button.on {
+  background: var(--sel);
+  color: var(--sel-text);
+}
+.vx-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 19px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+}
+.vx-iconbtn:hover {
+  border-color: var(--lo);
+  background: var(--hover);
+}
+.vx-scopes-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 6px;
+  flex: none;
+  font-size: 10px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.vx-scopes-sub label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.vx-scopes-sub .field.select {
+  height: 17px;
+  font-size: 10px;
+}
+.vx-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.vx-scopes-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 3px;
+  padding: 3px;
+  background: var(--lo);
+}
+.vx-scopes-grid.n4 {
+  grid-template-columns: 1fr 1fr;
+}
+.vx-scope {
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+  background: var(--scope-bg);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+.vx-scope-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.vx-scopes-foot {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 2px 6px;
+  height: 18px;
+  flex: none;
+  font: 10px var(--mono);
+  border-top: 1px solid var(--line);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.vx-scopes-foot .clip-lo {
+  color: #2f6bff;
+  font-weight: bold;
+}
+.vx-scopes-foot .clip-hi {
+  color: #e0302a;
+  font-weight: bold;
+}
+
+/* --- preset browser ----------------------------------------------------------------- */
+.vx-pb {
+  position: fixed;
+  z-index: 950;
+  left: 50%;
+  bottom: 36px;
+  transform: translateX(-50%);
+  width: min(1120px, calc(100vw - 32px));
+  height: min(600px, 62vh);
+  display: flex;
+  flex-direction: column;
+}
+.vx-pb-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  flex: none;
+  border-bottom: 1px solid var(--line);
+}
+.vx-pb-bar .vx-pb-search {
+  flex: 0 0 240px;
+  width: 240px;
+}
+.vx-pb-grid {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--pb-size, 200px), 1fr));
+  grid-auto-rows: min-content;
+  gap: 10px;
+  padding: 10px;
+  background: var(--field);
+}
+.vx-pb-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  background: var(--face-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.vx-pb-tile:hover {
+  border-color: var(--sel);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sel) 45%, transparent);
+}
+.vx-pb-tile:active {
+  transform: translateY(1px);
+}
+.vx-pb-img {
+  position: relative;
+  aspect-ratio: 3 / 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: repeating-conic-gradient(#3a3a3a 0 25%, #2e2e2e 0 50%) 0 0 / 12px 12px;
+  border-radius: 2px;
+}
+.vx-pb-img img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.vx-pb-wait {
+  /* static on purpose: dozens of animated spinners keep the compositor (and with software GL,
+     the GPU thread the previews render on) busy every frame */
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px dotted rgba(255, 255, 255, 0.35);
+}
+.vx-pb-err {
+  padding: 6px;
+  font-size: 10px;
+  color: #ffb4a8;
+  text-align: center;
+}
+.vx-pb-name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vx-pb-cat {
+  font-size: 10px;
+}
+.vx-pb-empty {
+  padding: 20px;
+}
+
+/* Mac themes: softer chrome */
+:is([data-theme='aperture'], [data-theme='aqua']) {
+  & .vx-scopes {
+    background: var(--m-panel, var(--face));
+    color: var(--m-text, var(--text));
+  }
+  & .vx-scopes-head,
+  & .vx-scopes-sub,
+  & .vx-scopes-foot {
+    border-color: var(--m-line, var(--line));
+  }
+  & .vx-scopes.docked {
+    border-left-color: var(--m-line, var(--line));
+  }
+  & .vx-scopes-grid {
+    background: var(--m-gap, var(--lo));
+  }
+  & .vx-seg {
+    border-color: var(--m-seg-border, var(--lo));
+    border-radius: 5px;
+  }
+  & .vx-seg button {
+    background: var(--m-seg, var(--face-2));
+    color: var(--m-bar-text, var(--text));
+    border-right-color: var(--m-seg-border, var(--lo));
+  }
+  & .vx-seg button.on {
+    background: var(--m-sel, var(--sel));
+    color: var(--m-sel-text, #fff);
+    text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.3);
+  }
+  & .vx-pb-grid {
+    background: var(--m-panel, var(--field));
+  }
+  & .vx-pb-tile {
+    background: var(--m-window, var(--face-2));
+    border-color: var(--m-line, var(--line));
+    color: var(--m-text, var(--text));
+    border-radius: 6px;
+  }
+  & .vx-pb-bar {
+    border-color: var(--m-line, var(--line));
+  }
+}

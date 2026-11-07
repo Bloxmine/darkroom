@@ -110,6 +110,18 @@ export interface DarkroomNative {
   onOpenFiles(cb: (files: OpenedFile[]) => void): () => void;
   /** Tell main the renderer has booted; queued open-file events are delivered after this. */
   ready(): void;
+
+  // --- closing with unsaved changes ---
+  /** Main asks the renderer to save before closing; reply with closeAfterSave(saved). */
+  onSaveBeforeClose(cb: () => void): () => void;
+  closeAfterSave(saved: boolean): void;
+
+  // --- Stable Diffusion bridge ---
+  /**
+   * The user-configured generation server URL (or null when generation is Off). Main relaxes CORS /
+   * Origin checks for exactly that origin so a stock ComfyUI / A1111 works without launch flags.
+   */
+  setGenServer(url: string | null): void;
 }
 
 /** IPC channel names (shared so they can't drift). */
@@ -127,4 +139,7 @@ export const IPC = {
   openFiles: 'darkroom:open-files',
   ready: 'darkroom:ready',
   appVersion: 'darkroom:app-version',
+  saveBeforeClose: 'darkroom:save-before-close',
+  closeAfterSave: 'darkroom:close-after-save',
+  setGenServer: 'darkroom:set-gen-server',
 } as const;

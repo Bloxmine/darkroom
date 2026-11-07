@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { AiDownloadPrompt } from './ui/ai/DownloadPrompt';
 import { DocsHost } from './ui/docs/DocsWindow';
 import './App.css';
 import './ui/themes/mac.css';
@@ -125,6 +126,7 @@ export default function App({ ready }: { ready: boolean }) {
       <StatusBar />
       <Dialogs />
       <DocsHost />
+      <AiDownloadPrompt />
       <ExtensionsHost />
       {!ready && (
         <div className="modal-backdrop light">

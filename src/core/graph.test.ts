@@ -81,3 +81,20 @@ describe('graph', () => {
     expect(connect(g, { node: 'y', port: 'out' }, { node: 'x', port: 'image' })).toBe(g);
   });
 });
+
+describe('engine target resolution', () => {
+  it('flattens a group nested two levels deep so its output is reachable by path', () => {
+    const inner = new GraphBuilder();
+    inner.output('out', inner.node('t.fx', {}, { image: inner.input('image') }, 'x'));
+    const mid = new GraphBuilder();
+    const g2 = createGroupNode(inner.toGroup('inner'));
+    g2.id = 'g2';
+    mid.nodes.push(g2);
+    mid.link(mid.input('image'), 'g2', 'image');
+    mid.output('out', 'g2');
+    const g1 = createGroupNode(mid.toGroup('mid'));
+    g1.id = 'g1';
+    const flat = flattenGraph({ nodes: [g1], edges: [] });
+    expect(flat.nodes.map((n) => n.id)).toContain('g1/g2/x');
+  });
+});

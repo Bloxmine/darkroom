@@ -1,5 +1,5 @@
 /** AI super-resolution (Real-ESRGAN), tiled with feathered seams. */
-import { InferenceMemo } from '../../core/ai/image';
+import { InferenceMemo, throwIfAborted } from '../../core/ai/image';
 import { runModel } from '../../core/ai/runtime';
 import { defineNode } from '../../core/registry';
 import type { NodeDef, Params, RawTex } from '../../core/types';
@@ -34,7 +34,7 @@ function layout(n: number, t: number): [number[], number] {
 }
 
 /** Run a x4 model over the image in overlapping tiles; returns RGBA8 at `factor`× (2× = 4× box-downsampled per tile). */
-async function upscaleTiled(model: string, rgb: Float32Array, W: number, H: number, factor: number, tile: number, label: string): Promise<RawTex> {
+async function upscaleTiled(model: string, rgb: Float32Array, W: number, H: number, factor: number, tile: number, label: string, signal?: AbortSignal): Promise<RawTex> {
   const F = factor;
   const OW = W * F, OH = H * F;
   const out = new Uint8Array(OW * OH * 4);
@@ -48,6 +48,7 @@ async function upscaleTiled(model: string, rgb: Float32Array, W: number, H: numb
     for (let ty = 0; ty < ys.length; ty++) {
       for (let tx = 0; tx < xs.length; tx++) {
         const x0 = xs[tx], y0 = ys[ty];
+        throwIfAborted(signal);
         const r = await runModel(model, { data: cropCHW(rgb, W, x0, y0, tw, th), dims: [1, 3, th, tw] });
         const [mh, mw] = r.dims.slice(-2);
         const s = mw / tw; // model scale (4)
@@ -154,8 +155,10 @@ const upscale = defineNode({
     const mix = mixOf(ctx.params);
     const anime = ctx.params.model === MODELS[1];
     const run = (model: string) =>
-      memo.get(`${model}:${size}:${F}x:${tile}`, fp, Math.min(W, H), Math.min(W, H), () =>
-        upscaleTiled(model, rgb, W, H, F, tile, `AI Upscale ${F}× (${W}×${H}), tile`),
+      memo.get(
+        `${model}:${size}:${F}x:${tile}`, fp, Math.min(W, H), Math.min(W, H),
+        (sig) => upscaleTiled(model, rgb, W, H, F, tile, `AI Upscale ${F}× (${W}×${H}), tile`, sig),
+        ctx.signal,
       );
     const a = mix.a !== 0 ? await run(anime ? 'realesrgan-x4plus-anime' : 'realesr-general-x4v3') : one;
     const b = mix.b !== 0 ? await run('realesr-general-x4v3-dn50') : one;

@@ -4,7 +4,7 @@
  * and an optional detail-recovery high-pass.
  */
 import '../../core/ai/models-denoise';
-import { InferenceMemo } from '../../core/ai/image';
+import { InferenceMemo, throwIfAborted } from '../../core/ai/image';
 import { runModel } from '../../core/ai/runtime';
 import { defineNode } from '../../core/registry';
 import type { NodeDef, RawTex } from '../../core/types';
@@ -56,7 +56,7 @@ function paddedCrop(rgb: Float32Array, W: number, H: number, x0: number, y0: num
 const ramp = (t: number) => (t >= 1 ? 1 : t <= 0 ? 0 : t * t * (3 - 2 * t));
 
 /** Run the denoiser over the image in overlapping tiles; returns RGBA float at the input size. */
-async function denoiseTiled(model: string, rgb: Float32Array, W: number, H: number, tile: number, label: string): Promise<RawTex> {
+async function denoiseTiled(model: string, rgb: Float32Array, W: number, H: number, tile: number, label: string, signal?: AbortSignal): Promise<RawTex> {
   const acc = new Float32Array(W * H * 3);
   const wsum = new Float32Array(W * H);
   const [xs, tw] = layout(W, tile);
@@ -71,6 +71,7 @@ async function denoiseTiled(model: string, rgb: Float32Array, W: number, H: numb
         const x0 = xs[tx], y0 = ys[ty];
         // tiles smaller than the tile size (small images / preview) are padded to the model's alignment
         const pw = alignUp(tw), ph = alignUp(th);
+        throwIfAborted(signal);
         const r = await runModel(model, { data: paddedCrop(rgb, W, H, x0, y0, tw, th, pw, ph), dims: [1, 3, ph, pw] });
         const n = pw * ph;
         // overlap with the neighbours on each side (0 at the image border)
@@ -144,8 +145,10 @@ const denoise = defineNode({
     const { fp, size } = sizedFp(rgb, W, H);
     const model = (MODELS.find((m) => m[0] === ctx.params.model) ?? MODELS[0])[1];
     const tile = Number(ctx.params.tile) || 256;
-    const dn = await memo.get(`${model}:${size}:${tile}`, fp, Math.min(W, H), Math.min(W, H), () =>
-      denoiseTiled(model, rgb, W, H, tile, `AI Denoise (${W}×${H}), tile`),
+    const dn = await memo.get(
+      `${model}:${size}:${tile}`, fp, Math.min(W, H), Math.min(W, H),
+      (sig) => denoiseTiled(model, rgb, W, H, tile, `AI Denoise (${W}×${H}), tile`, sig),
+      ctx.signal,
     );
     return { dn };
   },

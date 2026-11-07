@@ -50,6 +50,8 @@ export interface RenderResult {
   fullHeight: number;
   scale: number;
   ms: number;
+  /** Nodes actually re-rendered by this call (0 = everything came from the cache). */
+  evaluated: number;
 }
 
 export interface PresentOptions {
@@ -62,6 +64,12 @@ export interface PresentOptions {
   /** Nearest-neighbour when zoomed in. */
   pixelated?: boolean;
   background?: [number, number, number];
+  /** Compare layout: 'h' = `compare` left of `split` (x), 'v' = `compare` above `split` (canvas y from the top), 'full' = only `compare`. Default 'h'. */
+  compareMode?: 'h' | 'v' | 'full';
+  /** Present-time channel view (no node): 0 RGB, 1 R, 2 G, 3 B, 4 alpha, 5 Rec.709 luma. */
+  channel?: number;
+  /** Clipping indicators: values ≥ hi in any channel → red, ≤ lo in all channels → blue (0..1). */
+  clip?: { lo: number; hi: number } | null;
 }
 
 interface CacheEntry {
@@ -77,6 +85,8 @@ interface CpuEntry {
   status: 'pending' | 'done' | 'error';
   textures: Record<string, Tex>;
   error?: string;
+  /** Cancels this run when superseded. */
+  ctl?: AbortController;
 }
 
 /** Built-in uniform names; params whose `u_<key>` would collide get no auto-uniform (use `uniforms()` instead). */
@@ -113,6 +123,8 @@ export class Engine {
 
   private cache = new Map<string, CacheEntry>();
   private cpu = new Map<string, CpuEntry>();
+  /** Running count of node evaluations that missed the cache (for render stats). */
+  private evalCount = 0;
   private presentProg = PRESENT_FRAG;
   private unsub: () => void;
   /** Flat id → (graph, time) it was last successfully evaluated for, in the active namespace. */
@@ -169,6 +181,7 @@ export class Engine {
     this.lastSubmit = performance.now();
     if (opts.cacheTag) return this.inNamespace(opts.cacheTag, () => this.render(graph, { ...opts, cacheTag: undefined }));
     const t0 = performance.now();
+    const evals0 = this.evalCount;
     const flat = flattenGraph(graph);
     const nodes = new Map(flat.nodes.map((n) => [n.id, n]));
     const incoming = new Map<string, Map<string, { node: string; port: string }>>();
@@ -189,7 +202,7 @@ export class Engine {
         targetPort = r.port || targetPort;
       }
     }
-    const empty: RenderResult = { tex: null, width: 0, height: 0, fullWidth: 0, fullHeight: 0, scale: 1, ms: 0 };
+    const empty: RenderResult = { tex: null, width: 0, height: 0, fullWidth: 0, fullHeight: 0, scale: 1, ms: 0, evaluated: 0 };
     if (!targetId || !nodes.has(targetId)) return empty;
 
     let scale = opts.scale ?? 1;
@@ -240,6 +253,7 @@ export class Engine {
       fullHeight: res?.fullSize.height ?? 0,
       scale,
       ms: performance.now() - t0,
+      evaluated: this.evalCount - evals0,
     };
   }
 
@@ -334,6 +348,7 @@ export class Engine {
     const key = JSON.stringify([node.type, node.params, width, height, scale, this.time, inputKeys, cpuKey]) + (this.frame ? '#' + this.frame : '');
     const cached = this.cache.get(node.id);
     if (cached && cached.key === key) return cached;
+    this.evalCount++;
 
     const fullSize = { width: full[0], height: full[1] };
 
@@ -429,7 +444,8 @@ export class Engine {
   ) {
     const cpu = this.cpu; // the active namespace's map (async results must land there)
     const old = cpu.get(node.id);
-    const entry: CpuEntry = { key, status: 'pending', textures: old?.textures ?? {} };
+    if (old?.status === 'pending') old.ctl?.abort(); // a newer run replaces it
+    const entry: CpuEntry = { key, status: 'pending', textures: old?.textures ?? {}, ctl: new AbortController() };
     cpu.set(node.id, entry);
     const finish = (res: Record<string, TexSource>) => {
       if (cpu.get(node.id) !== entry) return; // superseded
@@ -446,6 +462,7 @@ export class Engine {
     };
     try {
       const r = def.cpu!({
+        signal: entry.ctl!.signal,
         params: node.params,
         scale,
         projectSize,
@@ -521,7 +538,10 @@ export class Engine {
       { u_img: res, u_cmp: opts.compare ?? res },
       {
         u_rect: [x, H - y - h, w, h],
-        u_split: opts.compare ? (opts.split ?? 0) : -1,
+        u_split: opts.compare ? (opts.compareMode === 'v' ? H - (opts.split ?? 0) : (opts.split ?? 0)) : -1,
+        u_cmpMode: !opts.compare ? 0 : opts.compareMode === 'v' ? 2 : opts.compareMode === 'full' ? 3 : 1,
+        u_channel: opts.channel ?? 0,
+        u_clip: opts.clip ? [1, opts.clip.lo, opts.clip.hi] : [0, 0, 1],
         u_bg: bg,
       },
     );
@@ -735,8 +755,17 @@ export class Engine {
 
   /** Render at full resolution and encode. */
   async export(graph: Graph, opts: { nodeId?: string; type?: 'image/png' | 'image/jpeg' | 'image/webp'; quality?: number; scale?: number } = {}): Promise<Blob> {
-    const res = this.render(graph, { nodeId: opts.nodeId, scale: opts.scale ?? 1 });
+    const scale = opts.scale ?? 1;
+    const res = this.render(graph, { nodeId: opts.nodeId, scale });
     if (!res.tex) throw new Error('Nothing to export — connect something to the Output node.');
+    const want = [Math.round(res.fullWidth * scale), Math.round(res.fullHeight * scale)];
+    if (res.tex.width < want[0] || res.tex.height < want[1]) {
+      const max = this.gl.maxSize;
+      const fit = Math.floor((max / Math.max(want[0] / scale, want[1] / scale)) * 100);
+      throw new Error(
+        `The output would be ${want[0]}×${want[1]} px, larger than this GPU's ${max} px texture limit. ` + `The largest scale that fits is ${fit}% — export at that or less, or reduce upscaling in the graph.`,
+      );
+    }
     const img = this.toImageData(res.tex);
     const c = new OffscreenCanvas(img.width, img.height);
     c.getContext('2d')!.putImageData(img, 0, 0);
@@ -747,6 +776,12 @@ export class Engine {
 /** Map a (possibly nested) group node id to the flat inner node + port feeding its first output. */
 function resolveGroupTarget(graph: Graph, id: string, prefix = ''): { id: string; port: string } | undefined {
   const g = graph.nodes.find((n) => n.id === id);
+  if (!g && id.includes('/')) {
+    // a nested group addressed by its flat path ('g1/g2'): descend into the outer group first
+    const [head, ...rest] = id.split('/');
+    const outer = graph.nodes.find((n) => n.id === head);
+    return outer?.group ? resolveGroupTarget(outer.group.graph, rest.join('/'), prefix + head + '/') : undefined;
+  }
   if (!g) return undefined;
   if (!g.group) return { id: prefix + id, port: '' };
   const outNode = g.group.graph.nodes.find((n) => n.type === 'core.groupOutput');
@@ -770,19 +805,35 @@ out vec4 fragColor;
 uniform sampler2D u_img;
 uniform sampler2D u_cmp;
 uniform vec4 u_rect;   // x, y (GL bottom-left origin), w, h
-uniform float u_split; // canvas x of split; <0 = none
+uniform float u_split; // canvas x (mode 1) / GL y (mode 2) of the split; <0 = none
+uniform int u_cmpMode; // 0 none, 1 left/right, 2 top/bottom, 3 compare only
+uniform int u_channel; // 0 rgb, 1 r, 2 g, 3 b, 4 a, 5 luma
+uniform vec3 u_clip;   // on, lo, hi
 uniform vec3 u_bg;
 void main() {
   vec2 p = gl_FragCoord.xy;
   vec2 uv = (p - u_rect.xy) / u_rect.zw;
   if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) { fragColor = vec4(u_bg, 1.0); return; }
   uv.y = 1.0 - uv.y; // texture row 0 = image top
-  vec4 c = (u_split >= 0.0 && p.x < u_split) ? texture(u_cmp, uv) : texture(u_img, uv);
+  bool useCmp = u_cmpMode == 3 || (u_cmpMode == 1 && p.x < u_split) || (u_cmpMode == 2 && p.y > u_split);
+  vec4 c = useCmp ? texture(u_cmp, uv) : texture(u_img, uv);
+  vec3 rgb = c.rgb;
+  float a = c.a;
+  if (u_channel == 1) rgb = vec3(c.r);
+  else if (u_channel == 2) rgb = vec3(c.g);
+  else if (u_channel == 3) rgb = vec3(c.b);
+  else if (u_channel == 4) { rgb = vec3(c.a); a = 1.0; }
+  else if (u_channel == 5) rgb = vec3(dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)));
   // checkerboard behind transparency
   vec2 cb = floor(p / 8.0);
   float chk = mod(cb.x + cb.y, 2.0) < 1.0 ? 0.32 : 0.42;
-  vec3 col = mix(vec3(chk), clamp(c.rgb, 0.0, 1.0), clamp(c.a, 0.0, 1.0));
-  if (u_split >= 0.0 && abs(p.x - u_split) < 1.0) col = vec3(1.0);
+  vec3 col = mix(vec3(chk), clamp(rgb, 0.0, 1.0), clamp(a, 0.0, 1.0));
+  if (u_clip.x > 0.5 && a > 0.0) {
+    vec3 v = u_channel == 0 ? c.rgb : rgb;
+    if (max(v.r, max(v.g, v.b)) >= u_clip.z) col = vec3(1.0, 0.0, 0.0);
+    else if (max(v.r, max(v.g, v.b)) <= u_clip.y) col = vec3(0.0, 0.35, 1.0);
+  }
+  if ((u_cmpMode == 1 && abs(p.x - u_split) < 1.0) || (u_cmpMode == 2 && abs(p.y - u_split) < 1.0)) col = vec3(1.0);
   fragColor = vec4(col, 1.0);
 }`;
 

@@ -219,7 +219,7 @@ export function groupNodes(graph: Graph, ids: string[], name = 'Group'): { graph
     group: { name, graph: { nodes: innerNodes, edges: innerEdges }, exposed: [] },
   };
   return {
-    graph: { nodes: [...graph.nodes.filter((n) => !sel.has(n.id)), groupNode], edges: outerEdges },
+    graph: { ...graph, nodes: [...graph.nodes.filter((n) => !sel.has(n.id)), groupNode], edges: outerEdges },
     groupId,
   };
 }
@@ -261,9 +261,14 @@ export function ungroupNode(graph: Graph, groupId: string): Graph {
   const edges = tmp.edges
     .filter((e) => e.to.node !== groupId)
     .flatMap((e) => (e.from.node !== groupId ? [e] : outSrc.get(e.from.port) ? [{ ...e, from: outSrc.get(e.from.port)! }] : []));
+  // the group's frames (backdrops / notes) come along, offset like its nodes
+  const innerFrames = (inner.frames ?? []).map((f) => ({ ...f, id: uid('f'), position: { x: f.position.x - cx + node.position.x, y: f.position.y - cy + node.position.y } }));
+  const frames = [...(graph.frames ?? []), ...innerFrames];
   return {
+    ...graph,
     nodes: tmp.nodes.filter((n) => n.type !== GROUP_INPUT && n.type !== GROUP_OUTPUT),
     edges: [...edges, ...innerEdges],
+    ...(frames.length ? { frames } : {}),
   };
 }
 

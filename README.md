@@ -71,6 +71,12 @@ trip. You can open any preset and take it apart.
   (skeleton, person, hair, skin and clothes masks) and Smart Auto-Crop (keeps faces whole, with
   headroom and rule-of-thirds placement), plus *Beauty Retouch*, *Hair Recolor*, *Restore Portrait*,
   *Motion Capture* and *Instagram Crop 4:5* presets. Runs locally; see [docs/AI.md](docs/AI.md).
+- **ControlNet.** Preprocessor nodes that make control maps exactly as the A1111 / ComfyUI preprocessors do:
+  Canny, Soft Edge, Scribble, M-LSD lines, Lineart, Depth, Normal (BAE), OpenPose (body, hands, face),
+  Segmentation (ADE20K colours), Content Shuffle, Tile and Color Grid, plus a Control Sheet. *Generate
+  (Stable Diffusion)* sends maps to **your own** ComfyUI or AUTOMATIC1111 / Forge server (off by default;
+  Preferences › Generation). Presets: *All Control Maps*, *Restyle*, *Pose Transfer*. See
+  [docs/CONTROLNET.md](docs/CONTROLNET.md).
   Presets: *Sunset Sky*, *Dramatic Sky*, *Clean High ISO*, *Graduated Filter*.
 - **Themes that follow your system.** *Auto* (the default) uses *Aperture* (dark graphite Aqua) in
   Dark Mode and *Aqua* (light Leopard) in Light Mode. *Classic* (a 2000s Windows pro tool) is also available.
@@ -79,8 +85,12 @@ trip. You can open any preset and take it apart.
   (rebindable shortcuts) and Advanced (import/export settings).
 - **Native Mac app.** A standalone Electron build with a native menu bar, native dialogs, Finder file
   associations and Open Recent. See [Mac app](#mac-app).
-- **Pro viewer.** Zoom/pan, pixel-exact zoom above 100%, A/B split compare against the source, and
-  false-colour/gamut/histogram nodes for checking exposure.
+- **Pro viewer.** Zoom/pan (fit, fill, 1:1, Space+drag), pixel-exact zoom above 100%, scopes
+  (histogram, waveform, vectorscope with skin-tone line and 75% targets, RGB parade), a pixel readout
+  with up to four colour samplers, an eyedropper on every colour parameter, channel (R/G/B/A/luma) and
+  clipping views, and A/B compare (left/right, top/bottom or hold <kbd>\\</kbd>) against the source, a
+  pinned node or a snapshot. View → Preset Browser shows every preset applied to your image as a live
+  thumbnail. False-colour/gamut/histogram nodes are there too.
 - **Projects.** `.darkroom` files with embedded images and custom nodes. Autosaves to IndexedDB. Exports
   PNG, JPEG or WebP at full resolution.
 - **Camera RAW.** DNG, CR2, CR3, NEF, ARW, RAF, ORF, RW2, PEF, SRW and more, developed with LibRaw
@@ -169,10 +179,30 @@ own photo onto the node graph, swap the preset from the **Node Library**, and ex
 | Group / ungroup | <kbd>Ctrl</kbd>+<kbd>G</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd> |
 | Enter / leave a group | <kbd>Ctrl</kbd>+<kbd>Enter</kbd> / <kbd>Ctrl</kbd>+<kbd>Backspace</kbd> |
 | Expose a parameter on its group | Right-click the parameter → *Expose on Group* |
-| Compare with the original | Viewer toolbar → A/B split |
+| Compare with the original | <kbd>C</kbd> (drag the split knob); hold <kbd>\\</kbd> to flash the reference; <kbd>Shift</kbd>+<kbd>T</kbd> snapshot |
+| Scopes / preset browser | <kbd>Shift</kbd>+<kbd>S</kbd> / <kbd>Shift</kbd>+<kbd>P</kbd> |
+| Colour sampler / eyedropper | <kbd>Shift</kbd>-click the image / the pipette next to a colour parameter |
+| Channel view / clipping | <kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>5</kbd> (<kbd>Alt</kbd>+<kbd>0</kbd> = RGB) / <kbd>J</kbd> |
 | Save / open / export | <kbd>Ctrl</kbd>+<kbd>S</kbd> / <kbd>Ctrl</kbd>+<kbd>O</kbd> / <kbd>Ctrl</kbd>+<kbd>E</kbd> |
 
 On macOS, <kbd>⌘</kbd> works wherever <kbd>Ctrl</kbd> is listed. Help → Keyboard Shortcuts has the full list.
+
+### Node graph editing
+
+| Action | How |
+|---|---|
+| Insert a node on a wire | Drag it onto the wire (the wire lights up; hold <kbd>Alt</kbd> to just move), or hover a wire and press <kbd>Tab</kbd> |
+| Remove / rewire a connection | <kbd>Alt</kbd>-click the wire · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>-drag from a connected input to move its wire · <kbd>Ctrl</kbd> + right-drag across wires to cut them |
+| Tidy up | <kbd>Shift</kbd>+<kbd>L</kbd> lays out the selection (or everything) left to right · Node → Arrange for align / distribute |
+| Frames and sticky notes | <kbd>Ctrl</kbd>+<kbd>J</kbd> frames the selection, <kbd>Shift</kbd>+<kbd>N</kbd> adds a note; drag a frame by its title to move its nodes, double-click to rename |
+| Rename / collapse / colour | Double-click a node's title or <kbd>F2</kbd> · <kbd>H</kbd> or the ▾ button · right-click → *Colour Tag* |
+| Bypass (mute) | Click the node's icon, or <kbd>B</kbd> |
+| Select upstream / downstream | <kbd>Shift</kbd>+<kbd>←</kbd> / <kbd>Shift</kbd>+<kbd>→</kbd> |
+| Favourites | Click ☆ in the library or the <kbd>Tab</kbd> search; favourites and recent nodes are listed first |
+| Save your own preset | Select a group (or nodes) → Node → *Save as Preset…*; it appears under **My Presets** (right-click to rename, export or delete) |
+| Minimap | Corner button or <kbd>Shift</kbd>+<kbd>M</kbd>; right-click the button to move it |
+
+With a node selected, new nodes go to its right and are connected to it (Preferences → General).
 
 ## Mac app
 
@@ -227,6 +257,7 @@ Architecture, IPC surface and security choices: [docs/DESKTOP.md](docs/DESKTOP.m
 | **Retro** | Palette Quantize (NES, PICO-8, C64, EGA, CGA, Mac Plus, Apple II, ZX Spectrum…), Error Diffusion (Atkinson, Floyd–Steinberg, JJN, Sierra), LCD subpixels |
 | **Utility** | Output, Reroute, Info, Split Compare, Channel View, Histogram Overlay, GLSL Shader |
 | **AI** | Depth Map, Subject Mask, Depth Fog, Click Select (SAM), Scene Segmentation, Surface Normals, Relight, AI Upscale, Remove Object (LaMa), Colorize B&W, Neural Style, Low-Light Enhance, AI Line Art, AI Denoise, Sky Mask, Sky Replace, Face Detection & Landmarks, Face Restoration, Pose / Body, Smart Auto-Crop (models run in the browser, see [docs/AI.md](docs/AI.md)) |
+| **ControlNet** | Canny, Soft Edge, Scribble, M-LSD Lines, Lineart, Depth, Normal Map, OpenPose, Segmentation, Content Shuffle, Tile / Blur, Color Grid, Inpaint Mask, Control Sheet, Generate (Stable Diffusion) (see [docs/CONTROLNET.md](docs/CONTROLNET.md)) |
 
 ## Custom nodes & plugins
 

@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { NumField } from './NumField';
+import { Icon } from './Icon';
+import { cancelEyedropper, useViewer } from '../store/viewer';
 
 type RGBA = [number, number, number, number];
 
@@ -47,7 +49,20 @@ function parseHex(s: string): [number, number, number] | null {
 }
 
 /** Classic HSV picker popup: SV square + hue strip + alpha + numeric RGBA/hex. */
-export function ColorPopup({ anchor, value, onChange, onClose }: { anchor: DOMRect; value: RGBA; onChange: (c: RGBA) => void; onClose: () => void }) {
+export function ColorPopup({
+  anchor,
+  value,
+  onChange,
+  onClose,
+  onEyedropper,
+}: {
+  anchor: DOMRect;
+  value: RGBA;
+  onChange: (c: RGBA) => void;
+  onClose: () => void;
+  /** Arm the viewer eyedropper; the picked colour is passed to `apply` (the caller commits it). */
+  onEyedropper?: (apply: (c: RGBA) => void) => void;
+}) {
   const [hsv, setHsv] = useState(() => rgbToHsv(value[0], value[1], value[2]));
   const [hex, setHex] = useState(toHex(value));
   const box = useRef<HTMLDivElement>(null);
@@ -62,7 +77,8 @@ export function ColorPopup({ anchor, value, onChange, onClose }: { anchor: DOMRe
   }, [anchor]);
 
   useEffect(() => {
-    const down = (e: MouseEvent) => !box.current?.contains(e.target as Node) && onClose();
+    // stay open while the eyedropper is armed (the pick click lands in the viewer)
+    const down = (e: MouseEvent) => !box.current?.contains(e.target as Node) && !useViewer.getState().eyedrop && onClose();
     const key = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('mousedown', down);
     window.addEventListener('keydown', key);
@@ -90,6 +106,7 @@ export function ColorPopup({ anchor, value, onChange, onClose }: { anchor: DOMRe
       fn(clamp01((e.clientX - r.left) / r.width), clamp01((e.clientY - r.top) / r.height));
     },
   });
+  const picking = useViewer((st) => !!st.eyedrop);
   const [h, s, v] = hsv;
   const hueRgb = hsvToRgb(h, 1, 1);
   const setChannel = (i: number, x: number) => {
@@ -126,6 +143,23 @@ export function ColorPopup({ anchor, value, onChange, onClose }: { anchor: DOMRe
             <NumField value={value[i]} step={0.01} onChange={(x) => setChannel(i, Math.max(0, x))} />
           </label>
         ))}
+        {onEyedropper && (
+          <button
+            type="button"
+            className={'tbtn small cp-eyedrop' + (picking ? ' checked' : '')}
+            title="Pick from the viewer (eyedropper)"
+            onClick={() =>
+              picking
+                ? cancelEyedropper()
+                : onEyedropper((c) => {
+                    setHsv(rgbToHsv(c[0], c[1], c[2]));
+                    setHex(toHex(c));
+                  })
+            }
+          >
+            <Icon name="color_picker" />
+          </button>
+        )}
         <label className="cp-field cp-hex">
           Hex
           <input

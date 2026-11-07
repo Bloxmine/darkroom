@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { listNodeDefs, listPresets } from '../core/registry';
 import { GROUP_INPUT, GROUP_OUTPUT } from '../core/graph';
-import { addNode, freeSpot } from '../store/actions';
+import { addNode, freeSpot, type AddOpts } from '../store/actions';
 import { useDoc } from '../store/doc';
 import { THEMES, useSettings } from '../store/settings';
 import { useUi } from '../store/ui';
 import { graphApi } from './commands';
+import { viewerMenuItems } from './viewer/viewerCommands';
 import { categoryIcon, nodeIcon } from './Icon';
 import { MenuList, useOutsideClose, type MenuItem } from './Menu';
 import { useRegistry } from './useRegistry';
@@ -15,7 +16,7 @@ function addAt() {
 }
 
 /** Category → node submenus, built live from the registry. */
-export function addNodeMenus(at: () => { x: number; y: number } = addAt): MenuItem[] {
+export function addNodeMenus(at: () => { x: number; y: number } = addAt, opts: AddOpts = at === addAt ? { auto: true } : {}): MenuItem[] {
   const inGroup = useDoc.getState().path.length > 0;
   const defs = listNodeDefs().filter((d) => !d.hidden || (inGroup && (d.id === GROUP_INPUT || d.id === GROUP_OUTPUT)));
   const cats = new Map<string, typeof defs>();
@@ -27,7 +28,7 @@ export function addNodeMenus(at: () => { x: number; y: number } = addAt): MenuIt
       cats
         .get(cat)!
         .sort((a, b) => a.name.localeCompare(b.name))
-        .map((d) => ({ label: d.name, icon: nodeIcon(d.id), title: d.description, run: () => void addNode({ kind: 'node', type: d.id }, at()) })),
+        .map((d) => ({ label: d.name, icon: nodeIcon(d.id), title: d.description, run: () => void addNode({ kind: 'node', type: d.id }, at(), undefined, opts) })),
   }));
   const presets = listPresets();
   if (presets.length) {
@@ -45,7 +46,7 @@ export function addNodeMenus(at: () => { x: number; y: number } = addAt): MenuIt
             pc
               .get(c)!
               .sort((a, b) => a.name.localeCompare(b.name))
-              .map((p) => ({ label: p.name, icon: 'bricks', title: p.description, run: () => void addNode({ kind: 'preset', id: p.id }, at()) })),
+              .map((p) => ({ label: p.name, icon: 'bricks', title: p.description, run: () => void addNode({ kind: 'preset', id: p.id }, at(), undefined, opts) })),
         })),
     });
   }
@@ -101,10 +102,12 @@ export const MENUS: { title: string; items: () => MenuItem[] }[] = [
       { cmd: 'view.zoomOut' },
       { sep: true },
       { cmd: 'view.compare' },
+      ...viewerMenuItems(), // viewer pro tools: fill, compare, channel, clipping, scopes, readout, presets
       { sep: true },
       { cmd: 'view.library' },
       { cmd: 'view.properties' },
       { cmd: 'view.thumbnails' },
+      { cmd: 'view.minimap' },
       { sep: true },
       { label: 'Theme', icon: 'palette', submenu: () => THEMES.map((t) => ({ cmd: 'view.theme.' + t.id })) },
     ],
@@ -134,6 +137,27 @@ export const MENUS: { title: string; items: () => MenuItem[] }[] = [
       { cmd: 'node.bypass' },
       { cmd: 'node.view' },
       { cmd: 'node.viewOutput' },
+      { cmd: 'node.rename' },
+      { cmd: 'node.collapse' },
+      { sep: true },
+      {
+        label: 'Arrange',
+        icon: 'chart_organisation',
+        submenu: () => [
+          { cmd: 'graph.tidy' },
+          { sep: true },
+          { cmd: 'graph.alignLeft' },
+          { cmd: 'graph.alignTop' },
+          { cmd: 'graph.distributeH' },
+          { cmd: 'graph.distributeV' },
+          { sep: true },
+          { cmd: 'graph.selectUp' },
+          { cmd: 'graph.selectDown' },
+        ],
+      },
+      { cmd: 'graph.frame' },
+      { cmd: 'graph.note' },
+      { cmd: 'node.savePreset' },
       { sep: true },
       { cmd: 'node.newCustom' },
       { cmd: 'node.editType' },

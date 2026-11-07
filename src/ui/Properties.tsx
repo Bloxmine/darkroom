@@ -20,6 +20,9 @@ import { useRegistry } from './useRegistry';
 import { CustomTypeRow, NodeErrorNote } from './CustomTypeInfo';
 import { RawMetaBlock } from './RawInfo';
 import { RAW } from '../core/raw/formats';
+import { GenerateBar, showGenerateBar } from '../core/sd/GenerateBar';
+import { EyedropperButton } from './viewer/Eyedropper';
+import { startEyedropper } from '../store/viewer';
 
 // ---------------------------------------------------------------------------
 // Generic fields
@@ -49,7 +52,7 @@ function Slider({ value, def, onChange }: { value: number; def: ParamDef; onChan
   );
 }
 
-function ColorField({ value, onChange, onEnd }: { value: number[]; onChange: (c: number[]) => void; onEnd: () => void }) {
+function ColorField({ value, onChange, onEnd, onPick, label = 'colour' }: { value: number[]; onChange: (c: number[]) => void; onEnd: () => void; onPick?: (c: number[]) => void; label?: string }) {
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const c = [value[0] ?? 0, value[1] ?? 0, value[2] ?? 0, value[3] ?? 1] as [number, number, number, number];
   return (
@@ -59,8 +62,18 @@ function ColorField({ value, onChange, onEnd }: { value: number[]; onChange: (c:
       </button>
       <code className="hex">{toHex(c)}</code>
       <span className="muted">α {c[3].toFixed(2)}</span>
+      {onPick && <EyedropperButton label={label} keepAlpha={c[3]} onPick={onPick} />}
       {anchor && (
         <ColorPopup
+          onEyedropper={
+            onPick &&
+            ((cb) =>
+              startEyedropper(label, (p) => {
+                const v = [...p.slice(0, 3).map((x) => Math.min(1, Math.max(0, x))), c[3]] as [number, number, number, number];
+                onPick(v);
+                cb(v);
+              }))
+          }
           anchor={anchor}
           value={c}
           onChange={onChange}
@@ -134,7 +147,7 @@ function ParamWidget({ node, k, def, value }: { node: GraphNode; k: string; def:
         </label>
       );
     case 'color':
-      return <ColorField value={(value as number[]) ?? [0, 0, 0, 1]} onChange={(c) => set(c)} onEnd={() => {}} />;
+      return <ColorField value={(value as number[]) ?? [0, 0, 0, 1]} onChange={(c) => set(c)} onEnd={() => {}} onPick={(c) => set(c, false)} label={def.label ?? k} />;
     case 'vec2': {
       const v = (value as number[]) ?? [0, 0];
       const step = def.step ?? 0.01;
@@ -436,6 +449,7 @@ export function Properties() {
         >
           {visible.length === 0 && <div className="pnote muted">{isGroup ? 'No exposed parameters.' : 'This node has no parameters.'}</div>}
           {customEditor && <NodeParamEditor kind={customEditor} node={node} />}
+          {showGenerateBar(node) && <GenerateBar node={node} />}
           {shown.map(([k, d]) => (
             <ParamRow key={k} node={node} k={k} def={d} inGroup={path.length > 0} openMenu={ctx.open} />
           ))}

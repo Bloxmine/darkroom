@@ -9,6 +9,7 @@ import { pickFiles } from '../../store/io';
 import { clearAutosave } from '../../store/persist';
 import { exportPrefsJson, importPrefsJson, resetPrefs, setPref, setTheme, THEMES, useSettings, type Prefs } from '../../store/settings';
 import { openDialog, status, useUi } from '../../store/ui';
+import { useViewer } from '../../store/viewer';
 import { native } from '../../native/native';
 import { Box, Button, Check, fmtBytes, Note, PopUp, Radios, Row, Sep, Stepper, TickSlider } from './controls';
 
@@ -62,6 +63,30 @@ export function GeneralPane() {
         <Check checked={s.confirmDiscard} onChange={S('confirmDiscard')}>
           Ask before discarding unsaved changes
         </Check>
+      </Row>
+      <Row label="Node graph" top col>
+        <Check checked={s.autoConnect} onChange={S('autoConnect')}>
+          Connect new nodes to the selected node
+        </Check>
+        <Check checked={s.insertOnWire} onChange={S('insertOnWire')}>
+          Drop a node on a wire to insert it (hold Alt to suppress)
+        </Check>
+      </Row>
+      <Row label="Ask before deleting">
+        <PopUp
+          label="Ask before deleting"
+          value={s.confirmDeleteOver}
+          onChange={S('confirmDeleteOver')}
+          width={190}
+          options={[
+            { value: 0, label: 'Never' },
+            { value: 3, label: 'More than 3 nodes' },
+            { value: 5, label: 'More than 5 nodes' },
+            { value: 10, label: 'More than 10 nodes' },
+            { value: 20, label: 'More than 20 nodes' },
+            { value: 50, label: 'More than 50 nodes' },
+          ]}
+        />
       </Row>
       <Sep />
       <Row label="Default project name">
@@ -147,6 +172,43 @@ export function AppearancePane() {
           <Check checked={s.nodeTooltips} onChange={S('nodeTooltips')}>
             Show node descriptions as tooltips
           </Check>
+          <Check checked={s.nodeIdTooltips} onChange={S('nodeIdTooltips')}>
+            Show node ids in tooltips
+          </Check>
+          <Check checked={s.snapToGrid} onChange={S('snapToGrid')}>
+            Snap nodes to the grid
+          </Check>
+        </Row>
+        <Row label="Grid size">
+          <PopUp
+            label="Grid size"
+            value={s.gridSize}
+            onChange={S('gridSize')}
+            width={160}
+            disabled={!s.snapToGrid}
+            options={[5, 10, 20, 25, 50].map((v) => ({ value: v, label: `${v} px` }))}
+          />
+        </Row>
+        <Row label="Minimap">
+          <PopUp
+            label="Minimap position"
+            value={s.minimap ? s.minimapPos : 'off'}
+            onChange={(v) => {
+              if (v === 'off') setPref('minimap', false);
+              else {
+                setPref('minimap', true);
+                setPref('minimapPos', v);
+              }
+            }}
+            width={160}
+            options={[
+              { value: 'bottom-right', label: 'Bottom right' },
+              { value: 'bottom-left', label: 'Bottom left' },
+              { value: 'top-right', label: 'Top right' },
+              { value: 'top-left', label: 'Top left' },
+              { value: 'off', label: 'Off' },
+            ]}
+          />
         </Row>
         <Row label="Wire style">
           <PopUp
@@ -236,6 +298,95 @@ export function ViewerPane() {
           Show the A/B split line by default
         </Check>
         <Note>Drag the split line in the viewer to compare the original with the result.</Note>
+      </Row>
+      <Row label="Compare layout">
+        <PopUp
+          label="Compare layout"
+          value={s.compareLayout}
+          width={190}
+          onChange={(v) => {
+            setPref('compareLayout', v);
+            useViewer.setState({ compareMode: v });
+          }}
+          options={[
+            { value: 'h', label: 'Split left / right' },
+            { value: 'v', label: 'Split top / bottom' },
+            { value: 'toggle', label: 'Toggle (hold \\)' },
+          ]}
+        />
+      </Row>
+      <Sep />
+      <Row label="Scopes" top col>
+        <Check
+          checked={s.scopesDefault}
+          onChange={(v) => {
+            setPref('scopesDefault', v);
+            useViewer.setState({ scopes: v });
+          }}
+        >
+          Show the scopes panel at launch
+        </Check>
+        <PopUp
+          label="Default scope"
+          value={s.scopesType}
+          width={190}
+          onChange={(v) => {
+            setPref('scopesType', v);
+            useViewer.setState({ scopeType: v });
+          }}
+          options={[
+            { value: 'histogram', label: 'Histogram' },
+            { value: 'waveform', label: 'Waveform' },
+            { value: 'vectorscope', label: 'Vectorscope' },
+            { value: 'parade', label: 'RGB parade' },
+            { value: 'all', label: 'All four' },
+          ]}
+        />
+      </Row>
+      <Row label="Pixel readout" top col>
+        <Check
+          checked={s.pixelReadout}
+          onChange={(v) => {
+            setPref('pixelReadout', v);
+            useViewer.setState({ readout: v });
+          }}
+        >
+          Show the colour under the pointer
+        </Check>
+      </Row>
+      <Row label="Eyedropper sample">
+        <PopUp
+          label="Eyedropper sample size"
+          value={s.eyedropperSize}
+          width={190}
+          onChange={S('eyedropperSize')}
+          options={[
+            { value: 1, label: 'Point sample' },
+            { value: 3, label: '3 × 3 average' },
+            { value: 5, label: '5 × 5 average' },
+          ]}
+        />
+      </Row>
+      <Row label="Clipping shown at" top col>
+        <span>
+          Shadows ≤ <Stepper value={s.clipLow} min={0} max={64} onChange={S('clipLow')} />
+        </span>
+        <span>
+          Highlights ≥ <Stepper value={s.clipHigh} min={192} max={255} onChange={S('clipHigh')} suffix="(8-bit levels)" />
+        </span>
+      </Row>
+      <Row label="Preset thumbnails">
+        <PopUp
+          label="Preset browser thumbnail size"
+          value={s.presetThumbSize}
+          width={190}
+          onChange={S('presetThumbSize')}
+          options={[
+            { value: 140, label: 'Small (140 px)' },
+            { value: 200, label: 'Medium (200 px)' },
+            { value: 260, label: 'Large (260 px)' },
+          ]}
+        />
       </Row>
     </div>
   );
@@ -598,6 +749,16 @@ export function PluginsPane({ ask }: PaneProps) {
         <Check checked={s.aiFollowZoom} onChange={S('aiFollowZoom')}>
           Re-run AI nodes when zooming in
         </Check>
+        <label title="Ask once before a model larger than this is downloaded for the first time">
+          Ask before downloads over{' '}
+          <select value={s.aiConfirmMB} onChange={(e) => setPref('aiConfirmMB', Number(e.target.value))}>
+            <option value={0}>never ask</option>
+            <option value={25}>25 MB</option>
+            <option value={50}>50 MB</option>
+            <option value={100}>100 MB</option>
+            <option value={250}>250 MB</option>
+          </select>
+        </label>
         <span className="grow" />
         <Note>{entries.length ? `${entries.length} files, ${fmtBytes(total)}` : ''}</Note>
         <Button disabled={!sel} onClick={() => sel && void deleteCached(sel).then(() => (setSel(null), refresh()))}>

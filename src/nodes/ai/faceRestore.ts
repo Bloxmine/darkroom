@@ -8,7 +8,7 @@
  * as float32 bit patterns in an RGBA8 data texture (exact, unlike RGBA16F).
  */
 import '../../core/ai/models-face';
-import { InferenceMemo } from '../../core/ai/image';
+import { InferenceMemo, throwIfAborted } from '../../core/ai/image';
 import { mpStatus } from '../../core/ai/mediapipe';
 import { runModel, setAiTask } from '../../core/ai/runtime';
 import { defineNode } from '../../core/registry';
@@ -154,7 +154,7 @@ function matchColor(out: Float32Array, orig: Float32Array, mask: Float32Array) {
   }
 }
 
-async function restore(src: RawTex, scale: number, model: string, maxFaces: number, small: boolean, keepColor: boolean): Promise<Restored> {
+async function restore(src: RawTex, scale: number, model: string, maxFaces: number, small: boolean, keepColor: boolean, signal?: AbortSignal): Promise<Restored> {
   const A = await analyzeFaces(src, 0.5);
   const W = src.width, H = src.height;
   type Job = { pts: Pt[]; oval: Pt[] | null };
@@ -178,6 +178,7 @@ async function restore(src: RawTex, scale: number, model: string, maxFaces: numb
       setAiTask(task, { label: 'Restoring faces', done: k, total: chosen.length });
       const M = similarity(chosen[k].pts, FFHQ_512);
       const input = warp(src, M);
+      throwIfAborted(signal);
       const out = await runModel(model, { data: input.slice(), dims: [1, 3, S, S] });
       const mask = cropMask(chosen[k].oval ? chosen[k].oval!.map(([x, y]): Pt => [M[0] * x + M[1] * y + M[2], M[3] * x + M[4] * y + M[5]]) : null);
       const ox = (k % cols) * S, oy = Math.floor(k / cols) * S, n = S * S;
@@ -228,7 +229,7 @@ const faceRestore = defineNode({
     const small = !!ctx.params.small;
     const keepColor = ctx.params.keepColor !== false;
     const short = Math.min(src.width, src.height);
-    const r = await memo.get(`${model}:${maxFaces}:${small}:${keepColor}`, texFingerprint(src), short, Math.round(short / ctx.scale), () => restore(src, ctx.scale, model, maxFaces, small, keepColor));
+    const r = await memo.get(`${model}:${maxFaces}:${small}:${keepColor}`, texFingerprint(src), short, Math.round(short / ctx.scale), (sig) => restore(src, ctx.scale, model, maxFaces, small, keepColor, sig), ctx.signal);
     return { atlas: r.atlas, meta: r.meta };
   },
   passes: [

@@ -20,6 +20,8 @@ export type ViewerBg = 'theme' | 'black' | 'grey' | 'white' | 'checker';
 export type DragRender = 'live' | 'pause';
 export type DefaultQuality = 'draft' | 'half' | 'screen';
 export type ExportFormat = 'image/png' | 'image/jpeg' | 'image/webp';
+/** Local Stable Diffusion server for the sd.generate node (see docs/CONTROLNET.md). */
+export type GenServer = 'off' | 'comfyui' | 'a1111';
 
 export interface Prefs {
   // General
@@ -43,6 +45,16 @@ export interface Prefs {
   pixelZoom: boolean;
   compareDefault: boolean;
   fitOnChange: boolean;
+  // Viewer › pro tools (scopes, readout, eyedropper, compare, clipping, preset browser)
+  scopesDefault: boolean;
+  scopesType: 'histogram' | 'waveform' | 'vectorscope' | 'parade' | 'all';
+  pixelReadout: boolean;
+  eyedropperSize: number;
+  compareLayout: 'h' | 'v' | 'toggle';
+  /** Clipping indicator thresholds in 8-bit levels: ≤ clipLow → blue, ≥ clipHigh → red. */
+  clipLow: number;
+  clipHigh: number;
+  presetThumbSize: number;
   // Performance
   /** Long-edge cap of the viewer preview in px; 0 = none. */
   previewCap: number;
@@ -59,12 +71,35 @@ export interface Prefs {
   aiPreferWebGPU: boolean;
   /** Re-run AI nodes at the zoomed-in preview resolution (off: they stay at fit-to-window resolution until export). */
   aiFollowZoom: boolean;
+  /** Ask before downloading an AI model larger than this many MB for the first time (0 = never ask). */
+  aiConfirmMB: number;
+  // Generation (sd.generate → the user's own ComfyUI / AUTOMATIC1111 server; off by default, see docs/CONTROLNET.md)
+  genServer: GenServer;
+  genUrlComfy: string;
+  genUrlA1111: string;
   // Keyboard: command id → combo ('' = no shortcut)
   keyOverrides: Record<string, string>;
   // Advanced
   showFps: boolean;
   showNodeIds: boolean;
+  // Node graph editor (Appearance / General)
+  snapToGrid: boolean;
+  gridSize: number;
+  /** Adding a node while one is selected places it to the right and wires it up. */
+  autoConnect: boolean;
+  minimapPos: MinimapPos;
+  /** Ask before deleting more than this many nodes at once; 0 = never ask. */
+  confirmDeleteOver: number;
+  /** Include the node id in node tooltips. */
+  nodeIdTooltips: boolean;
+  /** Dropping a node on a wire splices it in (hold Alt to suppress). */
+  insertOnWire: boolean;
+  /** Add-node search: recently added and starred entries ('n:<type>' / 'p:<preset id>'). */
+  addRecent: string[];
+  addFavorites: string[];
 }
+
+export type MinimapPos = 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
 
 export const PREF_DEFAULTS: Prefs = {
   launchAction: 'restore',
@@ -84,6 +119,14 @@ export const PREF_DEFAULTS: Prefs = {
   pixelZoom: true,
   compareDefault: false,
   fitOnChange: true,
+  scopesDefault: false,
+  scopesType: 'histogram',
+  pixelReadout: true,
+  eyedropperSize: 3,
+  compareLayout: 'h',
+  clipLow: 2,
+  clipHigh: 253,
+  presetThumbSize: 200,
   previewCap: 0,
   poolSize: 24,
   dragRender: 'live',
@@ -95,9 +138,22 @@ export const PREF_DEFAULTS: Prefs = {
   allowCodePlugins: true,
   aiPreferWebGPU: true,
   aiFollowZoom: false,
+  aiConfirmMB: 50,
+  genServer: 'off',
+  genUrlComfy: 'http://127.0.0.1:8188',
+  genUrlA1111: 'http://127.0.0.1:7860',
   keyOverrides: {},
   showFps: false,
   showNodeIds: false,
+  snapToGrid: true,
+  gridSize: 10,
+  autoConnect: true,
+  minimapPos: 'bottom-right',
+  confirmDeleteOver: 10,
+  nodeIdTooltips: false,
+  insertOnWire: true,
+  addRecent: [],
+  addFavorites: [],
 };
 
 /** Allowed values for enumerated prefs (validation of imported / stored JSON). */
@@ -112,13 +168,24 @@ const ENUMS: Partial<Record<keyof Prefs, readonly unknown[]>> = {
   viewerBg: ['theme', 'black', 'grey', 'white', 'checker'],
   previewCap: [0, 1024, 2048, 4096],
   poolSize: [8, 24, 48, 96],
+  aiConfirmMB: [0, 25, 50, 100, 250],
   dragRender: ['live', 'pause'],
   exportFormat: ['image/png', 'image/jpeg', 'image/webp'],
   exportScale: [0.25, 0.5, 1, 2],
+  gridSize: [5, 10, 20, 25, 50],
+  minimapPos: ['bottom-right', 'bottom-left', 'top-right', 'top-left'],
+  confirmDeleteOver: [0, 3, 5, 10, 20, 50],
+  genServer: ['off', 'comfyui', 'a1111'],
+  scopesType: ['histogram', 'waveform', 'vectorscope', 'parade', 'all'],
+  eyedropperSize: [1, 3, 5],
+  compareLayout: ['h', 'v', 'toggle'],
+  presetThumbSize: [140, 200, 260],
 };
 const RANGES: Partial<Record<keyof Prefs, [number, number]>> = {
   undoDepth: [10, 1000],
   exportQuality: [0.1, 1],
+  clipLow: [0, 64],
+  clipHigh: [192, 255],
 };
 
 /** Keep only valid, known keys (unknown or malformed values fall back to the default). */
@@ -139,6 +206,7 @@ export function sanitizePrefs(x: unknown): Prefs {
       out[k] = r ? Math.min(r[1], Math.max(r[0], k === 'undoDepth' ? Math.round(v) : v)) : v;
     } else if (typeof d === 'boolean' && typeof v === 'boolean') out[k] = v;
     else if (typeof d === 'string' && typeof v === 'string') out[k] = v.slice(0, 200);
+    else if (Array.isArray(d) && Array.isArray(v)) out[k] = [...new Set(v.filter((s): s is string => typeof s === 'string'))].slice(0, 100);
     else if (k === 'keyOverrides' && v && typeof v === 'object' && !Array.isArray(v)) {
       out[k] = Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([, s]) => typeof s === 'string')) as Record<string, string>;
     }
