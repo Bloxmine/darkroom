@@ -51,7 +51,13 @@ trip. You can open any preset and take it apart.
 - **Click to select, scene segmentation and relighting.** Select a node with a viewer tool and work
   in the viewer: click objects to select them (Segment Anything: SlimSAM), paint masks with a brush,
   or drag a light. Scene Segmentation (DETR panoptic) finds sky, people, vegetation, water, buildings…
-  for sky swaps; Relight adds a virtual lamp with shadows from an AI depth map.
+  for sky swaps.
+- **AI relighting with shadows.** Surface Normals (MoGe-2) estimates the shape of faces and objects;
+  Relight then removes much of the existing light and adds up to three point, spot or directional lights
+  with soft area-light shadows, contact shadows and ambient occlusion. Drag the lights in the viewer in
+  real time. Presets: *Studio Portrait Light*, *Rim Light*, *Golden Hour*, *Overhead Noon*, *Neon
+  Two-Tone*, *Candlelight* and *Dramatic Relight*. Why there is no diffusion relighter (IC-Light) yet:
+  [docs/AI.md](docs/AI.md#relighting).
 - **AI restoration and creative filters.** Upscale 2×/4× (Real-ESRGAN, tiled), Remove Object (LaMa
   inpainting, from any mask), Colorize B&W (DDColor), Neural Style (fast neural style), Low-Light
   Enhance (Zero-DCE) and AI Line Art (Informative Drawings), plus presets such as *Restore Old Photo*
@@ -220,7 +226,7 @@ Architecture, IPC surface and security choices: [docs/DESKTOP.md](docs/DESKTOP.m
 | **Optical** | Tilt-Shift, Zoom Blur, Radial Blur, Lens Flare, God Rays, Anaglyph 3D, Kaleidoscope |
 | **Retro** | Palette Quantize (NES, PICO-8, C64, EGA, CGA, Mac Plus, Apple II, ZX Spectrum…), Error Diffusion (Atkinson, Floyd–Steinberg, JJN, Sierra), LCD subpixels |
 | **Utility** | Output, Reroute, Info, Split Compare, Channel View, Histogram Overlay, GLSL Shader |
-| **AI** | Depth Map, Subject Mask, Depth Fog, Click Select (SAM), Scene Segmentation, Relight, AI Upscale, Remove Object (LaMa), Colorize B&W, Neural Style, Low-Light Enhance, AI Line Art, AI Denoise, Sky Mask, Sky Replace, Face Detection & Landmarks, Face Restoration, Pose / Body, Smart Auto-Crop (models run in the browser, see [docs/AI.md](docs/AI.md)) |
+| **AI** | Depth Map, Subject Mask, Depth Fog, Click Select (SAM), Scene Segmentation, Surface Normals, Relight, AI Upscale, Remove Object (LaMa), Colorize B&W, Neural Style, Low-Light Enhance, AI Line Art, AI Denoise, Sky Mask, Sky Replace, Face Detection & Landmarks, Face Restoration, Pose / Body, Smart Auto-Crop (models run in the browser, see [docs/AI.md](docs/AI.md)) |
 
 ## Custom nodes & plugins
 
@@ -320,6 +326,8 @@ node scripts/snap.mjs out.png 'node=effects.kuwahara&params={"radius":8}'
 - Selection models (Apache-2.0): [SlimSAM-77](https://huggingface.co/Xenova/slimsam-77-uniform) (Chen et al.,
   pruned from Segment Anything by Kirillov et al.) and
   [DETR ResNet-50 panoptic](https://huggingface.co/Xenova/detr-resnet-50-panoptic) (Carion et al.), ONNX exports by Xenova.
+- Relighting geometry: [MoGe-2](https://github.com/microsoft/MoGe) ViT-S normal (Wang et al., Microsoft, MIT; DINOv2
+  backbone Apache-2.0; [official ONNX export](https://huggingface.co/Ruicheng/moge-2-vits-normal-onnx)).
 - Denoise and sky models: [SCUNet](https://github.com/cszn/SCUNet) real-world PSNR/GAN (Zhang et al., Apache-2.0;
   [ONNX by Heliosoph](https://huggingface.co/Heliosoph/scunet-onnx)) and the SkySeg U²-Net from
   [xiongzhu666/Sky-Segmentation-and-Post-processing](https://github.com/xiongzhu666/Sky-Segmentation-and-Post-processing)

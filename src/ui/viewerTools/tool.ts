@@ -22,9 +22,11 @@ export interface ToolUiState {
   doneFor: string | null;
   /** Show the mask tint. */
   tint: boolean;
+  /** Multi-handle tools: index (into ActiveTool.handles) of the handle a click on empty space moves. */
+  activeHandle: number;
 }
 
-export const useToolUi = create<ToolUiState>(() => ({ pointMode: 1, brushSize: 80, brushHardness: 0.6, erase: false, doneFor: null, tint: true }));
+export const useToolUi = create<ToolUiState>(() => ({ pointMode: 1, brushSize: 80, brushHardness: 0.6, erase: false, doneFor: null, tint: true, activeHandle: 0 }));
 
 export interface ActiveTool {
   def: ViewerToolDef;
@@ -36,10 +38,49 @@ export interface ActiveTool {
   /** Engine flat id of the node that owns the tool (for the mask preview). */
   flat: string;
   name: string;
+  /** Multi-handle points tool (ViewerToolDef.handles): the editable handles, keyed on the edited node. */
+  handles?: ToolHandle[];
+}
+
+export interface ToolHandle {
+  /** Param key on the edited node (exposed key for a group). */
+  key: string;
+  label: string;
+  on: boolean;
+  value: number[] | null;
+  color?: number[];
 }
 
 function ownTool(n: GraphNode) {
   return toolDef(getNodeDef(n.type)?.viewerTool);
+}
+
+/**
+ * Handles of a multi-handle tool. `inner` is the node with the tool; `outer` the edited node (the same
+ * node, or a group exposing the handle params: handles whose param is not exposed are left out).
+ */
+function resolveHandles(def: ViewerToolDef, inner: GraphNode, exposedKey: (p: string) => string | undefined, outer: GraphNode): ToolHandle[] | undefined {
+  if (!def.handles?.length) return undefined;
+  const pdefs = getNodeDef(inner.type)?.params ?? {};
+  const read = (p: string): ParamValue | undefined => {
+    const k = exposedKey(p);
+    return (k ? outer.params[k] : inner.params[p]) ?? pdefs[p]?.default;
+  };
+  const out: ToolHandle[] = [];
+  def.handles.forEach((h, i) => {
+    const key = exposedKey(h.param);
+    if (!key) return;
+    const v = read(h.param);
+    const c = h.colorParam ? read(h.colorParam) : undefined;
+    out.push({
+      key,
+      label: h.label ?? String(i + 1),
+      on: h.enabledBy ? !!read(h.enabledBy) : true,
+      value: Array.isArray(v) ? (v as number[]) : null,
+      color: Array.isArray(c) ? (c as number[]) : undefined,
+    });
+  });
+  return out;
 }
 
 /** The active tool for the current selection, or null. */
@@ -57,6 +98,7 @@ export function resolveTool(s: DocState): ActiveTool | null {
       values: { param: own.param ? n.params[own.param] : undefined, vec2: own.vec2Param ? n.params[own.vec2Param] : undefined, box: own.boxParam ? n.params[own.boxParam] : undefined },
       flat: flatId(s.path, n.id),
       name: own.label ?? nodeName(n),
+      handles: resolveHandles(own, n, (p) => p, n),
     };
   }
   // a group (e.g. a preset): the first inner node with a tool whose param is exposed on the group
@@ -66,7 +108,8 @@ export function resolveTool(s: DocState): ActiveTool | null {
       if (!d) continue;
       const ex = (p?: string) => (p ? n.group!.exposed.find((e) => e.node === inner.id && e.param === p)?.key : undefined);
       const keys = { param: ex(d.param), vec2: ex(d.vec2Param), box: ex(d.boxParam) };
-      if (!keys.param && !keys.vec2) continue;
+      const handles = resolveHandles(d, inner, ex, n);
+      if (!keys.param && !keys.vec2 && !handles?.length) continue;
       return {
         def: d,
         nodeId: n.id,
@@ -74,6 +117,7 @@ export function resolveTool(s: DocState): ActiveTool | null {
         values: { param: keys.param ? n.params[keys.param] : undefined, vec2: keys.vec2 ? n.params[keys.vec2] : undefined, box: keys.box ? n.params[keys.box] : undefined },
         flat: flatId(s.path, n.id) + '/' + inner.id,
         name: d.label ?? nodeName(inner),
+        handles,
       };
     }
   }

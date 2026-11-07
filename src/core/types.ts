@@ -221,6 +221,22 @@ export interface ViewerToolDef {
   previewPort?: string;
   /** HUD title (default: the node name). */
   label?: string;
+  /**
+   * points: several draggable single points, each written to its own vec2 param (e.g. Relight's three
+   * lights). Takes precedence over `vec2Param` in the viewer; `vec2Param` stays the first handle's key.
+   */
+  handles?: ViewerToolHandle[];
+}
+
+export interface ViewerToolHandle {
+  /** vec2 param holding the point (0..1, top-left origin). */
+  param: string;
+  /** Short label drawn next to the handle and on its HUD button. */
+  label?: string;
+  /** Bool param: the handle is shown only while it is true. */
+  enabledBy?: string;
+  /** Color param used to tint the handle. */
+  colorParam?: string;
 }
 
 // ---------------------------------------------------------------------------

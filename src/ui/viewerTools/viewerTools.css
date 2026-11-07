@@ -50,6 +50,28 @@
   stroke-linecap: round;
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.7));
 }
+.vt-light.vt-active > circle:first-child {
+  stroke: var(--sel);
+  stroke-width: 2.5;
+}
+.vt-light-label {
+  fill: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.75);
+  stroke-width: 3px;
+  pointer-events: none;
+}
+.vt-swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 5px;
+  border-radius: 50%;
+  border: 1px solid var(--lo);
+  vertical-align: -1px;
+}
 .vt-box {
   fill: none;
   stroke: var(--sel);

@@ -88,9 +88,12 @@ function ToolLayer({ tool, host, spaceDown }: { tool: ActiveTool; host: React.Re
   const pending = useUi((s) => s.pending.some((p) => p === tool.flat || tool.flat.startsWith(p + '/') || p.startsWith(tool.flat + '/')));
   const { def } = tool;
 
-  const points = def.kind === 'points' && !def.vec2Param ? parsePoints(tool.values.param) : [];
-  const vec2 = def.vec2Param && Array.isArray(tool.values.vec2) ? (tool.values.vec2 as number[]) : null;
-  const shownPoints: ToolPoint[] = vec2 ? [{ x: vec2[0], y: vec2[1], label: 1 }] : points;
+  const points = def.kind === 'points' && !def.vec2Param && !tool.handles ? parsePoints(tool.values.param) : [];
+  const vec2 = !tool.handles && def.vec2Param && Array.isArray(tool.values.vec2) ? (tool.values.vec2 as number[]) : null;
+  // multi-handle tool: the enabled handles, with their index in tool.handles
+  const handles = (tool.handles ?? []).map((h, i) => ({ ...h, i })).filter((h) => h.on && h.value);
+  const activeIdx = handles.some((h) => h.i === ui.activeHandle) ? ui.activeHandle : (handles[0]?.i ?? 0);
+  const shownPoints: ToolPoint[] = tool.handles ? handles.map((h) => ({ x: h.value![0], y: h.value![1], label: 1 })) : vec2 ? [{ x: vec2[0], y: vec2[1], label: 1 }] : points;
   const box = boxDraft ?? (def.kind === 'box' ? parseBox(tool.values.param) : def.boxParam ? parseBox(tool.values.box) : null);
 
   // modifier keys (mode display) and brush shortcuts
@@ -134,7 +137,13 @@ function ToolLayer({ tool, host, spaceDown }: { tool: ActiveTool; host: React.Re
   const label = (e: { shiftKey: boolean; altKey: boolean }) => (e.altKey ? 0 : e.shiftKey ? 1 : ui.pointMode);
 
   const writePoints = (pts: ToolPoint[]) => {
-    if (vec2 && tool.keys.vec2) {
+    if (tool.handles) {
+      // one moved handle: pts[k] belongs to handles[k] (shown order)
+      pts.forEach((p, k) => {
+        const h = handles[k];
+        if (h && (p.x !== h.value![0] || p.y !== h.value![1])) editParam(tool.nodeId, h.key, [Math.round(clamp(p.x) * 1e4) / 1e4, Math.round(clamp(p.y) * 1e4) / 1e4]);
+      });
+    } else if (vec2 && tool.keys.vec2) {
       const p = pts[0];
       if (p) editParam(tool.nodeId, tool.keys.vec2, [Math.round(clamp(p.x) * 1e4) / 1e4, Math.round(clamp(p.y) * 1e4) / 1e4]);
     } else if (tool.keys.param) editParam(tool.nodeId, tool.keys.param, pointsJson(pts));
@@ -165,7 +174,14 @@ function ToolLayer({ tool, host, spaceDown }: { tool: ActiveTool; host: React.Re
       return;
     }
     const hit = hitPoint(p.cx, p.cy);
-    if (hit >= 0) drag.current = { kind: 'move', idx: hit };
+    if (tool.handles) {
+      // drag a handle, or move the selected handle to the click and drag it from there
+      const k = hit >= 0 ? hit : handles.findIndex((h) => h.i === activeIdx);
+      if (k < 0) return;
+      useToolUi.setState({ activeHandle: handles[k].i });
+      if (hit < 0) writePoints(shownPoints.map((q, j) => (j === k ? { ...q, x: clamp(p.x), y: clamp(p.y) } : q)));
+      drag.current = { kind: 'move', idx: k };
+    } else if (hit >= 0) drag.current = { kind: 'move', idx: hit };
     else if (def.single) {
       writePoints([{ x: clamp(p.x), y: clamp(p.y), label: 1 }]);
       drag.current = { kind: 'move', idx: 0 };
@@ -262,6 +278,22 @@ function ToolLayer({ tool, host, spaceDown }: { tool: ActiveTool; host: React.Re
           })()}
           {shownPoints.map((p, i) => {
             const c = toCss(p);
+            const h = tool.handles ? handles[i] : undefined;
+            if (h) {
+              const col = h.color ? `rgb(${h.color.slice(0, 3).map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255)).join(',')})` : undefined;
+              return (
+                <g key={h.key} className={'vt-light' + (h.i === activeIdx ? ' vt-active' : '')} transform={`translate(${c.x},${c.y})`}>
+                  <circle r={11} />
+                  <circle r={4.5} className="vt-light-core" style={col ? { fill: col } : undefined} />
+                  {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => (
+                    <line key={a} x1={14} x2={19} transform={`rotate(${a})`} />
+                  ))}
+                  <text className="vt-light-label" x={15} y={-13}>
+                    {h.label}
+                  </text>
+                </g>
+              );
+            }
             if (def.single)
               return (
                 <g key={i} className="vt-light" transform={`translate(${c.x},${c.y})`}>
@@ -286,7 +318,7 @@ function ToolLayer({ tool, host, spaceDown }: { tool: ActiveTool; host: React.Re
       <div className="vt-hud" onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
         <div className="vt-title">
           <b>{tool.name}</b>
-          <span className="vt-kind">{def.kind === 'brush' ? 'Brush' : def.kind === 'box' ? 'Box' : def.single ? 'Position' : 'Points'}</span>
+          <span className="vt-kind">{def.kind === 'brush' ? 'Brush' : def.kind === 'box' ? 'Box' : tool.handles ? (handles.length > 1 ? `${handles.length} lights` : 'Light') : def.single ? 'Position' : 'Points'}</span>
           {pending && <span className="vt-busy">working…</span>}
         </div>
         {def.kind === 'points' && !def.single && (
@@ -300,6 +332,18 @@ function ToolLayer({ tool, host, spaceDown }: { tool: ActiveTool; host: React.Re
               </button>
             </div>
             <span className="vt-count">{points.length} pt{points.length === 1 ? '' : 's'}</span>
+          </div>
+        )}
+        {tool.handles && handles.length > 1 && (
+          <div className="vt-row">
+            <div className="vt-seg">
+              {handles.map((h) => (
+                <button key={h.key} className={'btn' + (h.i === activeIdx ? ' vt-on' : '')} onClick={() => useToolUi.setState({ activeHandle: h.i })} title="Clicks on the image move this light">
+                  {h.color && <span className="vt-swatch" style={{ background: `rgb(${h.color.slice(0, 3).map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255)).join(',')})` }} />}
+                  Light {h.label}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {def.kind === 'brush' && (
@@ -331,7 +375,11 @@ function ToolLayer({ tool, host, spaceDown }: { tool: ActiveTool; host: React.Re
             ? '[ ] size · X erase · Space-drag pans'
             : def.kind === 'box'
               ? 'Drag a box · Space-drag pans'
-              : def.single
+              : tool.handles
+                ? handles.length > 1
+                  ? 'Drag a light · a click moves the selected light'
+                  : 'Click or drag to place the light'
+                : def.single
                 ? 'Click or drag to place'
                 : `Click to add · Shift include · Alt exclude · drag a point to move · right-click removes${def.boxParam ? ' · drag empty area for a box' : ''}`}
         </div>

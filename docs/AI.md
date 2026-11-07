@@ -103,7 +103,7 @@ Attribution:
 |---|---|---|---|
 | Click Select (SAM) | `ai.segmentAnything` | `mask` | SlimSAM (Segment Anything, pruned): click objects in the viewer; + / − points and an optional box |
 | Scene Segmentation | `ai.sceneSegment` | `mask`, `labels` | DETR ResNet-50 panoptic (COCO): a class (sky, person, vegetation…) as a mask, plus a colour-coded label map |
-| Relight | `ai.relight` | `out` | Virtual point light: normals from a depth map (Sobel), soft shadows by a screen-space ray march |
+| Relight | `ai.relight` | `out` | Up to three point / spot / directional lights with soft shadows; see [Relighting](#relighting) |
 | Paint Mask | `mask.paint` (category Mask) | `mask` | Brush strokes painted in the viewer, rasterised at any resolution |
 
 **`ai.segmentAnything` params:**
@@ -128,15 +128,7 @@ Attribution:
 - `labels` (second output): Sky, Person, Trees, Grass, Water, Mountain, Rock, Building, Road, Ground, Vehicles,
   Animals, Other; tinted by the image luminance.
 
-**`ai.relight` inputs/params:** `image`, `depth` (mask, near = white, e.g. from `ai.depth`; unconnected = flat).
-- `light` (vec2 on the image, draggable in the viewer), `height` (in front of the image plane, image height = 1), `color`, `intensity`, `falloff` (inverse square).
-- `ambient` (level of what the light misses; 1 = unchanged) and `mode`:
-  - *Add light*: `base·ambient + base·light`;
-  - *Multiply shade*: only darkens, towards `ambient` where the light doesn't reach;
-  - *Full relight*: `base·(ambient + light)` + a little specular.
-- `strength` (normal gain) and `radius` (Sobel distance, px); steep depth steps are compressed so object outlines don't get dark rims.
-- `depthScale` (scene depth in image heights), `shadows`, `shadowSoftness`, `shadowStrength`: 24 jittered steps
-  towards the light, at most 40 % of the image height, starting 3 px out (no self-shadowing). `specular`, `showLight`.
+**`ai.relight`** is documented in its own section, [Relighting](#relighting) (with `ai.normals` and the light-rig presets).
 
 **`mask.paint` params:** `strokes` (hidden JSON `[{"r":0.03,"h":0.6,"e":0,"p":[x,y,x,y,…]}]`, r = radius as a
 fraction of the image height, h = hardness, e = 1 to erase), `fill` (start white), `feather` (px), `invert`.
@@ -151,7 +143,9 @@ viewerTool?: 'points' | 'brush' | 'box' | {
   kind: 'points' | 'brush' | 'box';
   param?: string;      // JSON param edited by the tool (default points / strokes / box)
   single?: boolean;    // points: one draggable point
-  vec2Param?: string;  // single point written to a vec2 param instead of JSON (Relight: 'light')
+  vec2Param?: string;  // single point written to a vec2 param instead of JSON
+  handles?: { param: string; label?: string; enabledBy?: string; colorParam?: string }[];
+                       // points: several draggable points, one vec2 param each (Relight: light, light2, light3)
   boxParam?: string;   // points: drag on an empty area draws a box into this JSON param
   previewPort?: string;// mask output shown as a translucent tint while the tool is active
   label?: string;      // HUD title
@@ -163,6 +157,10 @@ viewerTool?: 'points' | 'brush' | 'box' | {
   and pan work. Space-drag and the middle button still pan; the wheel still zooms.
 - Edits go through `setParam` (undoable). A whole brush stroke or point drag is **one** undo step
   (`beginGesture` / `endGesture` in `tool.ts` collapse the history entries of the gesture).
+- **Handles** (`handles`): each enabled handle (its `enabledBy` bool is true) is drawn as a labelled lamp tinted with its
+  `colorParam`. Drag a handle to move it; a click on empty space moves the *selected* handle (HUD buttons *Light 1/2/3*).
+  For a group, only handles whose param is exposed are shown; `enabledBy`/`colorParam` are read from the exposed key if
+  there is one, else from the inner node.
 - **Points:** click adds a point in the current mode; Shift = include, Alt = exclude; drag a point to move it; right-click removes it
   (or the box); drag on an empty area draws a box (if `boxParam`).
 - **Brush:** Paint / Erase (X), size (`[` `]`, in full-resolution px), hardness.
@@ -178,7 +176,7 @@ viewerTool?: 'points' | 'brush' | 'box' | {
 - `ai.skySwap`: scene segment (Sky), then a gradient sky (top → horizon over the upper half), colour-matched part-way to the photo, then mixed in.
   Knobs: sky top / horizon colours, gradient height, match to photo, amount, mask threshold / softness / refine / feather.
 - `ai.selectiveColor`: Click Select keeps the object in colour, the rest goes black & white. Knobs: points/box (hidden; the viewer tool), mask, threshold, refine, feather, invert, colour amount.
-- `ai.dramaticRelight`: depth map, then Relight (*Full relight*, ambient 0.32), then a vignette. Knobs: light position (draggable), height, intensity, colour, ambient, falloff, shadows, vignette.
+- `ai.dramaticRelight`: Surface Normals, then Relight (*Replace lighting*, one low warm lamp, ambient 0.2), then a vignette. Knobs: light position (draggable), height, intensity, colour, ambient, falloff, shadows, shadow softness, remove old light, vignette. The light-rig presets are listed under [Relighting](#relighting).
 - `ai.cutout`: Click Select, then alpha from the mask, then a drop shadow over a background colour (alpha 0 = transparent). Knobs: points/box, mask, refine, feather, shadow angle / distance / blur / opacity, background.
 
 ### Models
@@ -241,7 +239,6 @@ Measured on an Apple-silicon Mac, ORT 1.31.1, warm, as a worker round trip (incl
 - DETR at the default 512 is coarse (masks at ¼ resolution); spiky tree tops against the sky are partly lost.
   The refine helps; 800 is sharper but ~2.5× slower.
 - Paint Mask takes the brush aspect from the project size: on an `image` input with another aspect, round dabs become slightly elliptical.
-- Relight is screen-space: no shadows from things outside the frame, and relative depth means the light's height and the depth range need tuning per photo.
 - The mask tint is a downsampled readback; it lags ~0.1–0.3 s behind a stroke, and longer when the GPU is busy.
 
 ## Image-to-image: upscale, remove object, colorize, style, low light, line art
@@ -629,6 +626,7 @@ SNAP_TIMEOUT=900000 node scripts/snap.mjs out.png "node=ai.faceRestore&img=portr
 ```
 - In a query string, `+` decodes to a space: write `Mesh%20%2B%20boxes`.
 - Unit tests: `src/nodes/ai/face-geom.test.ts` (similarity transform, five points, IoU/NMS/merge, YuNet decoding) and `src/nodes/ai/autocrop-score.test.ts`.
+- Relighting unit tests: `src/nodes/ai/relight-math.test.ts` (normal-map encode/decode and the OpenCV → OpenGL flip, light vectors for point / rim / directional lights, wrap, Blinn exponent, spot cone, the 4×4 shading-fit solve, MoGe post-processing, rig params).
 
 ### Known gaps (people)
 - **Profiles.** MediaPipe's face mesh is unreliable on strong profiles: one profile in the STS-135 crew photo got a poor mesh, while the other three fell back to YuNet boxes. Feature masks need landmarks.
@@ -637,6 +635,224 @@ SNAP_TIMEOUT=900000 node scripts/snap.mjs out.png "node=ai.faceRestore&img=portr
 - **Occlusions in restoration.** Restoration hallucinates through occlusions: a flower held in the mouth became teeth. Large, already-sharp faces gain little and lose some fine detail at 512 px, so use a lower strength for those. CPU restoration is slow (≈17 s per face single-threaded).
 - **Auto-crop size.** The crop size follows `zoom`, not the content: `size()` cannot depend on the image. Very tight crops can trade headroom against the eye line.
 - **Pose masks** come from the whole-image pass only (see above). The Multiclass mask is the default anyway.
+
+## Relighting
+
+| Node | Id | Outputs | What it does |
+|---|---|---|---|
+| Surface Normals | `ai.normals` | `normals` (image), `depth` (mask, near = white), `mask` (geometry, ≈ not sky) | MoGe-2 ViT-S: per-pixel surface normals and an affine point map in one pass, upsampled edge-aware |
+| Relight | `ai.relight` | `out` | Up to 3 lights (point / spot / directional), hemisphere ambient, soft area-light shadows, contact shadows, ambient occlusion, specular, wrap / subsurface; *Replace lighting* divides out an estimate of the existing light first |
+
+Typical graph: `image → Surface Normals`, then `normals` and `depth` → Relight (the presets do this). Relight also
+works with only a depth map (e.g. `ai.depth`, as old projects have it); its normals are then derived from the depth.
+
+### `ai.normals` (Surface Normals)
+- **Output convention:** the normal map uses the OpenGL convention: red = right, green = **up**, blue = towards the
+  viewer, `rgb = n · 0.5 + 0.5` (a wall facing the camera is lilac-blue `(0.5, 0.5, 1)`). MoGe's OpenCV camera-space
+  normals (x right, y down, z forward) are converted with `(x, −y, −z)` (`cvToGl` in `relight-math.ts`).
+- **Depth output:** disparity `1 / z` of MoGe's point map, spread between the 0.5 and 99.5 percentiles of the valid
+  pixels, near = white; pixels outside MoGe's geometry mask (sky) are 0. Same semantics as `ai.depth`, so either
+  can drive Relight, Tilt-Shift, Depth Fog…
+- **Params:**
+  - `resolution`: short side fed to the model, 392 / 518 (default) / 672. MoGe resizes internally, so this mostly sets
+    the output resolution before the upsample.
+  - `detail`: number of ViT tokens: *Fast* 1200 / *Balanced* 1800 (default) / *Fine* 2500 (MoGe's suggested range).
+  - `strength`: scales the tangential part of the normals (< 1 flattens, > 1 exaggerates).
+  - `edges`, `smoothing`: the joint-bilateral upsample (`jbu4` in `_shared.ts`, all four channels).
+  - `flatSky`: where MoGe sees no geometry, the normal faces the camera instead of noise.
+- **Inference** runs once per image content, inference size and token count (`InferenceMemo`), so every Relight
+  change is free. Like every `ai.*` node it is *heavy*: it evaluates at the fit-to-window preview scale in the viewer.
+
+### `ai.relight` (Relight)
+Inputs `image`, `normals` (optional; takes priority), `depth` (optional; mask, near = white). It is **pure GPU**
+(`heavy: false`): it re-renders at the viewer's own resolution, while Surface Normals stays cached. Dragging a light
+on the studio preset costs ≈9–10 ms at the 600×400 preview and ≈40–55 ms at 1600×1067, both including a full readback
+(Metal, M2 Pro).
+
+**Lights** (light 1 always on; `on2`, `on3` switch the others):
+- `type`, `type2`, `type3`:
+  - *Point*: a lamp at the handle;
+  - *Spot*: a lamp at the handle aiming straight into the scene (a pool of light); `spotAngle` and `spotSoftness`;
+  - *Directional*: a sun. The handle's offset from the image centre sets the direction, `height` the elevation.
+- `light`, `light2`, `light3`: the handle positions, dragged in the viewer.
+- `height…`: in image heights in front of the nearest surface. Negative values put the light behind the subject
+  (rim / back light).
+- `color…`, `intensity…`.
+- `size…`: radius of the light in image heights; it sets the shadow penumbra.
+- `falloff`: inverse-square strength for point and spot lights.
+- `background`: extra distance (image heights) of the far background (depth ≈ 0) from point and spot lights, so a
+  lamp near the subject does not light a distant backdrop or the sky. 0 = plain depth.
+
+**Environment:**
+- `ambient` (old param, same meaning): the level of what the lights miss.
+- `skyColor` / `groundColor`: a hemisphere ambient: surfaces facing up get the first, facing down the second (bounce).
+- `occlusion`: depth-based ambient occlusion (8 rotated taps at two radii; only rises within `thickness` count).
+
+**Blend** (`mode`):
+- *Add light*: `base·env + base·lights + ½·specular`;
+- *Multiply shade*: only darkens, towards the ambient where the lights don't reach;
+- *Full relight*: `base·(env + lights) + specular` (the old default);
+- *Replace lighting* (new default): `albedo·(env + lights) + specular`, with `albedo = base / S_old`.
+
+**Removing the existing light (approximate delighting):** `S_old = S_fit^delight · S_lf^evenOut`.
+- `S_fit` is a ridge-regularised least-squares fit of linear luminance against the normals, `Y ≈ c0 + c·n`, on a
+  40 × 40 grid. Very dark, clipped and far-background pixels are left out. It recovers the dominant direction of the
+  old light. The 4×4 normal equations are built and solved on the GPU (two tiny passes). `S_fit` is that fit at the
+  pixel's normal, relative to a camera-facing normal, clamped to 0.4–2.5.
+- `S_lf` is the low-frequency, edge-aware (bilateral in log space, 96 px) luminance relative to its mean, clamped to 0.5–2.
+- The division fades out in near-black areas, where it would only amplify noise and dark albedo.
+- `keepBackground` keeps the far background (sky, distant scenery) as it was: the sky is a light source, not a lit
+  surface.
+
+**Shadows:**
+- **Area lights.** For each light, 4 rays go to jittered points on a disc of radius `size × 2·shadowSoftness`. Each ray
+  takes 12 steps with quadratic spacing (dense near the start); the result is the mean of the rays (a real penumbra).
+  The jitter noise is removed by a depth-aware 5×5 blur. The shadow buffer is capped at a 1280 px long side.
+- **Contact shadows** (`contact`): an extra short (3 % of the image height), crisp march along the central ray.
+- **Rim and halo fixes:**
+  - *Finite thickness* (`thickness`, 0..1 of the depth range): a surface only occludes a ray that passes less than this
+    below it. Without it, the depth map behaves like a solid wall, and a person casts a hard "ghost" of their outline
+    onto the sky. That was the main artefact of the old node.
+  - *Silhouette ramps never occlude* (`edgeSlope`): the few pixels at an object outline where upsampling blends
+    subject and background depth would otherwise shadow a sliver right next to every silhouette. Pixels whose depth
+    slope is steeper than `edgeSlope` (depth range per image height) are dropped from the occluder buffer.
+  - *The far background is at infinity*: depth ≈ 0 never receives cast shadows or occlusion.
+  - *Depth-only normals use edge-aware gradients*: per axis, the one-sided difference with the smaller magnitude, at
+    1×, 2× and 4× `radius`. A depth step therefore no longer tilts the pixels on either side of it (the old bright and
+    dark rims).
+- `shadows`, `shadowStrength`, `depthScale` as before.
+
+**Material:**
+- `specular` and `roughness`: Blinn-Phong with exponent `2 / r⁴ − 2`, gated by the shadows.
+- `wrap` and `subsurface`: wrap diffuse `(n·l + w) / (1 + w)`; the wrapped part is tinted with the subsurface colour (skin).
+- `shape`: normal gain. `strength` and `radius` apply only when there is no normals input.
+
+**Output:** `exposure` (EV), `amount` (mix with the original), and `view`, a debug view:
+- *Result*;
+- *Light only*;
+- *Normals*;
+- *Shadows*: the visibility of lights 1–3 in RGB, × the AO;
+- *Albedo (delit)*;
+- *Old shading*.
+
+**Viewer tool:** a multi-handle points tool (`handles`, see *Viewer tools* above). Each enabled light is a labelled lamp
+tinted in its colour. Drag a lamp to move it; a click elsewhere moves the light selected in the HUD.
+
+**Compatibility:** the id and every old param key and meaning are unchanged (`light`, `height`, `color`, `intensity`,
+`falloff`, `ambient`, `mode` with the old three options, `strength`, `radius`, `depthScale`, `shadows`,
+`shadowSoftness`, `shadowStrength`, `specular`, `showLight`). New params take their defaults. Old projects therefore
+load and render without changes to the graph. They do look different, because the fixes apply:
+- no ghost shadows or rims;
+- the far background is no longer lit by point lights. Set *Background distance* to 0 for the old behaviour there.
+
+### Presets (`src/presets/ai-select.ts`, rigs in `relight-math.ts` `RIGS`)
+All of them are Surface Normals → Relight (*Replace lighting*). Each exposes the light positions (draggable in the
+viewer), the intensities, colours, ambient, shadows, *Remove old light* and *Amount*.
+
+| Preset | Lights |
+|---|---|
+| `ai.dramaticRelight` | One warm lamp low at the upper left, ambient 0.2, a vignette |
+| `ai.studioPortrait` | Spot key upper left, cool point fill right, rim light behind (height −0.25) |
+| `ai.rimLight` | Two back lights (cool left, warm right), weak front fill |
+| `ai.goldenHourRelight` | Low warm directional sun from the left, cool sky fill, a touch of vibrance |
+| `ai.overheadNoon` | Hard directional sun from almost straight above, blue-sky ambient, the sky kept |
+| `ai.neonRelight` | Magenta and cyan point lights left and right, dark ambient |
+| `ai.candleRelight` | One small warm light low in front, fast falloff, near-black ambient, a vignette |
+
+### Model
+
+| Model | File used | Size | Licence | Source |
+|---|---|---|---|---|
+| MoGe-2 ViT-S normal | `model.onnx` (fp32, dynamic H×W, opset 14) | 140.9 MB | MIT (code and weights); DINOv2 backbone Apache-2.0 | [Ruicheng/moge-2-vits-normal-onnx](https://huggingface.co/Ruicheng/moge-2-vits-normal-onnx) @ `e50ffda4` (the official export by the first author) |
+
+- **I/O:** inputs `image` (1×3×H×W, RGB 0..1; the normalisation is in the graph) and `num_tokens` (int64 scalar).
+  Outputs `points` (1×H×W×3), `normal` (1×H×W×3, unit), `mask` (1×H×W), `scale`.
+- **Backends:** it runs on the WebGPU EP of ORT 1.31.1 without patches, including its `If`, `Round` and `Mod` ops.
+  WebGPU and WASM outputs match: the mean difference of the rendered normal map is 0.04/255.
+- **CORS:** `access-control-allow-origin` is served.
+
+Attribution: R. Wang, S. Xu, Y. Dong, Y. Deng, J. Xiang, Z. Lv, G. Sun, X. Tong, J. Yang, *MoGe-2: Accurate Monocular
+Geometry with Metric Scale and Sharp Details*, 2025. [github.com/microsoft/MoGe](https://github.com/microsoft/MoGe).
+
+### Timings (Apple M2 Pro, ORT 1.31.1, warm)
+
+| Step | WebGPU (Metal) | WASM 1 thread |
+|---|---|---|
+| MoGe-2 ViT-S, 518×644 (portrait), 1800 tokens | ≈0.62 s (first run ≈1.2 s) | ≈13.0 s |
+| MoGe-2 ViT-S, 770×518 (street), 1800 tokens | ≈0.63–0.68 s | ≈13.3 s |
+| Relight after a light move, 600×400 preview | ≈9–10 ms incl. readback | (WebGL, same) |
+| Relight after a light move, 1600×1067 | ≈40–55 ms incl. readback | (WebGL, same) |
+
+The first use downloads 140.9 MB (the model) plus the ORT runtime.
+
+### What was considered and rejected
+Checked in November 2026 with the Hugging Face API, the repositories' licence files, and runs in onnxruntime (CPU) and
+in Chromium (Metal WebGPU).
+
+**Normal estimators:**
+- **Metric3D v2 ViT-S** ([onnx-community/metric3d-vit-small](https://huggingface.co/onnx-community/metric3d-vit-small) @ `ee63b95d`):
+  - it works, at 75.8 MB fp16 (fp16 I/O) or 150.7 MB fp32, with outputs `predicted_depth`, `predicted_normal` and `normal_confidence`;
+  - its code is BSD-2-Clause, but the README sends commercial use to the authors, and the HF card says CC0;
+  - on `street` it read the lake's reflections as a vertical wall, where MoGe-2 got the water plane right;
+  - MoGe-2 also gives sharper detail (flowers) and depth + mask from the same pass. Kept as the fallback candidate.
+- **DSINE:** Imperial College licence, "non-commercial, internal or academic research purposes" only.
+- **Omnidata** (DPT-hybrid normals): trained on the Omnidata Starter Dataset, whose EULA is non-commercial; no ONNX either
+  (`jzhangbs/dpt-hybrid-omnidata-normal` is a 490 MB PyTorch file).
+- **Sapiens normal:** CC-BY-NC (Meta), excluded; the onnx-community 0.3B export is 245 MB–1.36 GB anyway.
+- **HyDen MoGe-v2 surface normal** (facebook): FAIR non-commercial licence, 1.46 GB.
+- **DeepBump** (ONNX, 26.7 MB): GPL-3.0, and made for textures, not photos.
+- **Diffusion normal estimators:** StableNormal (Apache-2.0, ≈3.4 GB of fp16 weights), Marigold-normals (Apache-2.0,
+  1.7 GB UNet fp16) and Lotus-normal (Apache-2.0, 3.5 GB UNet fp32). None has an ONNX export, they run many SD steps,
+  and they are far too heavy for a node that should take about a second.
+
+**Intrinsic decomposition (delighting):**
+- **compphoto/Intrinsic** (Careaga & Aksoy, ordinal shading): "academic use only", patent notice.
+- **RGB↔X:** non-commercial. Excluded as briefed.
+- No permissive intrinsic model with an ONNX export was found. The delighting is therefore the normals-based fit plus
+  the low-frequency luminance described above. It is approximate: strong cast shadows and coloured light in the
+  original survive partly.
+
+**Diffusion relighting / ControlNet in the browser:**
+- **IC-Light** (lllyasviel; SD1.5 fine-tune for foreground relighting):
+  - *Licences.* The code is Apache-2.0. The weight repo [lllyasviel/ic-light](https://huggingface.co/lllyasviel/ic-light)
+    (`iclight_sd15_fc/fbc/fcon`, 1.72 GB each) states no licence. The weights derive from SD1.5 (CreativeML OpenRAIL-M).
+  - *The only ONNX port.* [Daankular/ic-light-onnx-fc](https://huggingface.co/Daankular/ic-light-onnx-fc) @ `696ef1db`
+    is a third-party export from July 2026 on a Realistic Vision 5.1 base, with no licence and no model card. Its files:
+    UNet 1.72 GB (fp16 weights, external data), CLIP text encoder 492.6 MB, VAE decoder 198.1 MB, VAE encoder 136.8 MB.
+    That is **≈2.55 GB** in all.
+  - *Measured here.* That UNet runs in ORT-web 1.31.1 on Metal WebGPU (M2 Pro, 16 GB):
+    - session creation ≈3–4 s;
+    - **≈0.8 s per step at 512×512** and ≈1.13 s at 640×512, at batch 1;
+    - classifier-free guidance doubles the batch.
+  - *Estimated total.* 20–25 steps plus the text encoder and the VAE is roughly 35–60 s per image at 512–640 px, after
+    a 2.5 GB download. The result also has to be upscaled and detail-transferred back onto the photo: IC-Light
+    re-renders the subject at 512–768 px, and faces drift.
+  - *Not built.* The project does not ship models without a clear licence (as with Zero-DCE and GPEN), and the cost is
+    out of proportion for an editor node. It becomes possible if an explicitly licensed IC-Light ONNX (ideally
+    fp16 + int8 text encoder) appears. The runtime would then need multi-file external data (`externalData` in the
+    session options; the benchmark used it successfully), a CLIP BPE tokenizer and a scheduler.
+- **Stable Diffusion + ControlNet:**
+  - ControlNet SD1.5 ONNX exports (`ForserX/sd-controlnet-*-onnx`, ≈724 MB each, no licence file) need a 1.7–3.4 GB SD1.5 UNet on top;
+  - LCM-Dreamshaper-v7 ONNX (MIT card): 4.27 GB fp32;
+  - SD-Turbo ORT-web (`schmuell/sd-turbo-ort-web`): Stability AI *non-commercial* licence;
+  - MLC web-stable-diffusion: SD1.5 only, no ControlNet, Chrome WebGPU needs a GPU with ~8 GB of memory.
+  - None is a relighting model; all would generate a new image rather than relight this one.
+
+### Known gaps (relighting)
+- **Screen-space geometry.**
+  - Shadows come only from what is in the frame and visible; hidden back sides don't exist.
+  - The depth is relative (MoGe's affine point map or Depth Anything's disparity), so `depthScale`, `thickness` and the
+    light heights are photo-dependent.
+- **Approximate delighting.**
+  - Strong hard shadows, coloured light and specular highlights in the original are only partly removed.
+  - Very dark albedo (black hair, a forest in shade) is deliberately left alone, so it cannot be brightened by delighting.
+- **Fine structures.** MoGe-2 at 1800 tokens gives trees and grass "striped" normals; raking light (golden hour) makes
+  that visible on forests. Lower *Surface relief* or *Normal strength*.
+- **Depth-only graphs.** With only `ai.depth` (old projects), the soft depth ramp at outlines can still leave a faint
+  light seam; Surface Normals avoids it.
+- **No exposure normalisation.** *Replace lighting* applies the new light as-is, so strong rigs can over- or
+  under-expose a photo. Use *Exposure* or the intensities.
+- **Spot lights** aim straight into the scene (−z), not at a target.
 
 ## Runtime (`src/core/ai/`)
 
@@ -649,6 +865,7 @@ SNAP_TIMEOUT=900000 node scripts/snap.mjs out.png "node=ai.faceRestore&img=portr
 | `worker-gpu.ts` / `worker-wasm.ts` | Worker entries: the JSEP build (WebGPU + CPU) or the smaller CPU-only build |
 | `image.ts` | Resampling, NCHW packing, normalisation, the inference memo |
 | `models-img.ts` | Image-to-image models (upscale, inpaint, colorize, style, low light, line art), registered with `registerModel()` |
+| `models-relight.ts` | MoGe-2 ViT-S (normals + geometry) for `ai.normals` |
 | `onnx-proto.ts` | Minimal ONNX protobuf editing for `ModelInfo.prepare`: `freeImageDims()`, `buildZeroDce()` |
 | `AiModels.tsx` | The *AI Models* section of the Plugin Manager, and the download-progress toast |
 
@@ -713,6 +930,7 @@ top (14.8–29.5 MB runtime + the model).
 ```bash
 node scripts/snap.mjs out.png "node=ai.depth&img=street&wait=120"
 node scripts/snap.mjs out.png "preset=ai.portraitBokeh&img=portrait&wait=120"
+node scripts/snap.mjs out.png "preset=ai.studioPortrait&img=portrait&wait=200"   # Surface Normals → Relight
 SNAP_TIMEOUT=300000 node scripts/snap.mjs …        # snap's per-shot timeout (ms)
 ```
 - `&wait=<s>` raises the harness's wait for pending CPU nodes (the default is 2.5 s). Each snap run uses a

@@ -1,10 +1,12 @@
 /**
  * Presets built on the AI selection / relighting nodes (Click Select, Scene Segmentation, Relight).
  * Click-select presets expose the hidden `points`/`box` params, so selecting the preset node shows the
- * point tool in the viewer; Relight exposes `light`, so its light can be dragged there too.
+ * point tool in the viewer; the relight presets expose `light` (and `light2`/`light3`), so their lights can
+ * be dragged there too.
  */
 import { GraphBuilder } from '../core/graph';
-import type { PresetDef } from '../core/types';
+import type { Params, PresetDef } from '../core/types';
+import { RIGS, rigParams, type Rig } from '../nodes/ai/relight-math';
 
 function skySwap(): PresetDef {
   const b = new GraphBuilder();
@@ -62,15 +64,34 @@ function selectiveColor(): PresetDef {
   };
 }
 
-function dramaticRelight(): PresetDef {
+/** Surface Normals → Relight (normals + depth from the same MoGe-2 pass). Returns [builder, input, relight id]. */
+function relightBase(params: Params) {
   const b = new GraphBuilder();
   const img = b.input('image');
-  const d = b.node('ai.depth', { smoothing: 0.5 }, { image: img });
-  const rl = b.node(
-    'ai.relight',
-    { mode: 'Full relight', ambient: 0.32, intensity: 2.2, falloff: 1.2, height: 0.3, light: [0.28, 0.22], color: [1, 0.86, 0.68, 1], shadowStrength: 0.85, specular: 0.2 },
-    { image: img, depth: { node: d, port: 'depth' } },
-  );
+  const nm = b.node('ai.normals', {}, { image: img });
+  const rl = b.node('ai.relight', params, { image: img, normals: { node: nm, port: 'normals' }, depth: { node: nm, port: 'depth' } });
+  return { b, img, nm, rl };
+}
+
+function dramaticRelight(): PresetDef {
+  const { b, rl } = relightBase({
+    mode: 'Replace lighting',
+    ambient: 0.2,
+    intensity: 2.6,
+    falloff: 1.2,
+    height: 0.3,
+    size: 0.15,
+    light: [0.14, 0.2],
+    color: [1, 0.84, 0.64, 1],
+    shadowStrength: 0.9,
+    specular: 0.25,
+    roughness: 0.4,
+    delight: 0.7,
+    evenOut: 0.2,
+    skyColor: [0.75, 0.82, 1, 1],
+    groundColor: [0.5, 0.42, 0.38, 1],
+    keepBackground: 0.25,
+  });
   const vig = b.node('stylize.vignette', { amount: 0.25, radius: 0.75, softness: 0.8 }, { image: rl });
   b.output('out', vig);
   b.expose('light', rl, 'light', 'Light position')
@@ -80,16 +101,97 @@ function dramaticRelight(): PresetDef {
     .expose('ambient', rl, 'ambient', 'Ambient (rest)')
     .expose('falloff', rl, 'falloff', 'Falloff')
     .expose('shadows', rl, 'shadowStrength', 'Shadows')
+    .expose('softness', rl, 'size', 'Shadow softness')
+    .expose('delight', rl, 'delight', 'Remove old light')
     .expose('vignette', vig, 'amount', 'Vignette');
   return {
     id: 'ai.dramaticRelight',
     name: 'Dramatic Relight (AI)',
     category: 'AI',
-    tags: ['relight', 'light', 'dramatic', 'moody', 'low key', 'depth', 'shadow', 'ai'],
-    description: 'Darkens the scene and lights it again from a virtual lamp, using an AI depth map for surface shape and soft shadows. Select the preset and drag the light in the viewer.',
+    tags: ['relight', 'light', 'dramatic', 'moody', 'low key', 'depth', 'normals', 'shadow', 'ai'],
+    description:
+      'Removes most of the existing light and relights the photo from one low, warm lamp with soft shadows, using AI surface normals and depth (MoGe-2, runs in your browser). Select the preset and drag the light in the viewer.',
     group: b.toGroup('Dramatic Relight (AI)'),
   };
 }
+
+/**
+ * A relight preset from a light rig (relight-math.ts RIGS): Surface Normals → Relight with the rig's
+ * lights, plus an optional finishing node. The three light positions are exposed, so every light can be
+ * dragged in the viewer while the preset is selected.
+ */
+function rigPreset(id: string, name: string, rig: Rig, description: string, tags: string[], extra: Params = {}, finish?: (b: GraphBuilder, rl: string) => string): PresetDef {
+  const { b, rl } = relightBase({ mode: 'Replace lighting', ...rigParams(rig), ...extra });
+  const out = finish ? finish(b, rl) : rl;
+  b.output('out', out);
+  const n = rig.lights.filter((l) => l.intensity > 0).length;
+  b.expose('light', rl, 'light', 'Light 1 position');
+  if (n > 1) b.expose('light2', rl, 'light2', 'Light 2 position');
+  if (n > 2) b.expose('light3', rl, 'light3', 'Light 3 position');
+  b.expose('intensity', rl, 'intensity', 'Light 1 intensity');
+  if (n > 1) b.expose('intensity2', rl, 'intensity2', 'Light 2 intensity');
+  if (n > 2) b.expose('intensity3', rl, 'intensity3', 'Light 3 intensity');
+  b.expose('color', rl, 'color', 'Light 1 colour');
+  if (n > 1) b.expose('color2', rl, 'color2', 'Light 2 colour');
+  b.expose('ambient', rl, 'ambient', 'Ambient')
+    .expose('shadows', rl, 'shadowStrength', 'Shadows')
+    .expose('delight', rl, 'delight', 'Remove old light')
+    .expose('amount', rl, 'amount', 'Amount');
+  return { id, name, category: 'AI', tags: ['relight', 'light', 'lighting', 'normals', 'shadow', 'ai', ...tags], description, group: b.toGroup(name) };
+}
+
+const relightPresets = (): PresetDef[] => [
+  rigPreset(
+    'ai.studioPortrait',
+    'Studio Portrait Light (AI)',
+    RIGS.studio,
+    'Classic studio lighting on any photo: a soft key light (spot) from the upper left, a cool fill from the right and a rim light from behind, with soft shadows from AI surface normals and depth. Drag the three lights in the viewer.',
+    ['studio', 'portrait', 'key light', 'fill light', 'rim light', 'three-point', 'headshot'],
+    { specular: 0.25, roughness: 0.4, wrap: 0.35 },
+  ),
+  rigPreset(
+    'ai.rimLight',
+    'Rim Light (AI)',
+    RIGS.rim,
+    'Two back lights outline the subject with cool and warm rims, the front stays dark: AI surface normals tell which edges face the lights. Drag the lights in the viewer.',
+    ['rim', 'back light', 'edge light', 'silhouette', 'kicker', 'moody'],
+    { specular: 0.1, wrap: 0.1, delight: 0.75 },
+  ),
+  rigPreset(
+    'ai.goldenHourRelight',
+    'Golden Hour Relight (AI)',
+    RIGS.golden,
+    'A low, warm sun from the side (directional) with long soft shadows and a cool sky fill. Drag the sun handle around the image to change where it comes from.',
+    ['golden hour', 'sunset', 'sun', 'warm', 'sunlight', 'long shadows'],
+    { wrap: 0.3, shadowStrength: 0.85, contact: 0.6, keepBackground: 0.55 },
+    (b, rl) => b.node('color.vibranceSaturation', { vibrance: 0.15 }, { image: rl }),
+  ),
+  rigPreset(
+    'ai.overheadNoon',
+    'Overhead Noon Light (AI)',
+    RIGS.noon,
+    'Hard midday sun from almost straight above: short crisp shadows under brows, nose and chin, and a bright blue-sky ambient.',
+    ['noon', 'midday', 'harsh light', 'overhead', 'sun', 'summer'],
+    { shadowStrength: 0.9, contact: 0.8, specular: 0.2, roughness: 0.35, keepBackground: 0.85 },
+  ),
+  rigPreset(
+    'ai.neonRelight',
+    'Neon Two-Tone (AI)',
+    RIGS.neon,
+    'Magenta and cyan neon tubes left and right, the classic two-tone night-portrait look, on a dark ambient. Drag the two lights in the viewer and pick their colours.',
+    ['neon', 'two-tone', 'cyberpunk', 'magenta', 'cyan', 'night', 'club', 'colour gel'],
+    { specular: 0.35, roughness: 0.3, wrap: 0.25, delight: 0.8 },
+  ),
+  rigPreset(
+    'ai.candleRelight',
+    'Candlelight (AI)',
+    RIGS.candle,
+    'One warm, small candle-like light low in front with a fast falloff, everything else falls into darkness. Drag the flame in the viewer.',
+    ['candle', 'candlelight', 'fire', 'warm', 'low key', 'night', 'chiaroscuro'],
+    { wrap: 0.4, delight: 0.8, specular: 0.15 },
+    (b, rl) => b.node('stylize.vignette', { amount: 0.35, radius: 0.7, softness: 0.85 }, { image: rl }),
+  ),
+];
 
 function cutout(): PresetDef {
   const b = new GraphBuilder();
@@ -120,4 +222,4 @@ function cutout(): PresetDef {
   };
 }
 
-export default (): PresetDef[] => [skySwap(), selectiveColor(), dramaticRelight(), cutout()];
+export default (): PresetDef[] => [skySwap(), selectiveColor(), dramaticRelight(), cutout(), ...relightPresets()];

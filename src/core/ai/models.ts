@@ -15,7 +15,7 @@ export interface ModelFile {
 export interface ModelInfo {
   id: string;
   name: string;
-  task: 'depth' | 'matting' | 'saliency' | 'segmentation' | 'super-resolution' | 'inpainting' | 'colorization' | 'style-transfer' | 'low-light' | 'line-art' | 'denoising' | 'face' | 'pose' | 'face-restoration';
+  task: 'depth' | 'matting' | 'saliency' | 'segmentation' | 'super-resolution' | 'inpainting' | 'colorization' | 'style-transfer' | 'low-light' | 'line-art' | 'denoising' | 'face' | 'pose' | 'face-restoration' | 'normals';
   licence: string;
   /** Model card. */
   page: string;
