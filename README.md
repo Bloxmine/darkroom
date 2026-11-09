@@ -71,6 +71,17 @@ trip. You can open any preset and take it apart.
   (skeleton, person, hair, skin and clothes masks) and Smart Auto-Crop (keeps faces whole, with
   headroom and rule-of-thirds placement), plus *Beauty Retouch*, *Hair Recolor*, *Restore Portrait*,
   *Motion Capture* and *Instagram Crop 4:5* presets. Runs locally; see [docs/AI.md](docs/AI.md).
+- **Vision-language AI.** Select by Text (type “red jacket, paddle”: OWLv2 finds it, SAM traces it), Text Mask
+  (CLIPSeg soft masks for “sky”, “water”, “skin”, with `-` to subtract), Caption & OCR (Florence-2: captions,
+  reading text, object detection, phrase grounding; copy the text or use it as the project name), and a
+  *Describe a look…* CLIP search plus *More like this* in the Preset Browser. Presets *Recolour by Text*,
+  *Blur All But…* and *Cut Out by Text*. Runs locally; see [docs/AI.md](docs/AI.md#vision-language-text-prompts-captions-ocr-clip-search).
+- **AI motion, slow motion, style and cutouts.** Optical Flow (NeuFlow v2 / RAFT, with a Middlebury colour-wheel view)
+  drives Flow Motion Blur (shutter angle), Flow Warp and a real Datamosh that smears the previous frames along the motion.
+  Frame Interpolation (RIFE) makes in-between frames, and *Export Video › Smooth slow motion ×2 / ×4* renders AI slow
+  motion from any video. Style from Image (AdaIN) repaints a photo in the style of any painting you connect. Background
+  Removal (BiRefNet) gives hair-detail cutouts with edge colour decontamination. Presets: *Datamosh*, *Motion Blur*,
+  *Painting from Image*, *Hair-Detail Cutout*. See [docs/AI.md](docs/AI.md#motion-interpolation-style-from-image-and-matting).
 - **ControlNet.** Preprocessor nodes that make control maps exactly as the A1111 / ComfyUI preprocessors do:
   Canny, Soft Edge, Scribble, M-LSD lines, Lineart, Depth, Normal (BAE), OpenPose (body, hands, face),
   Segmentation (ADE20K colours), Content Shuffle, Tile and Color Grid, plus a Control Sheet. *Generate
@@ -256,7 +267,7 @@ Architecture, IPC surface and security choices: [docs/DESKTOP.md](docs/DESKTOP.m
 | **Optical** | Tilt-Shift, Zoom Blur, Radial Blur, Lens Flare, God Rays, Anaglyph 3D, Kaleidoscope |
 | **Retro** | Palette Quantize (NES, PICO-8, C64, EGA, CGA, Mac Plus, Apple II, ZX Spectrum…), Error Diffusion (Atkinson, Floyd–Steinberg, JJN, Sierra), LCD subpixels |
 | **Utility** | Output, Reroute, Info, Split Compare, Channel View, Histogram Overlay, GLSL Shader |
-| **AI** | Depth Map, Subject Mask, Depth Fog, Click Select (SAM), Scene Segmentation, Surface Normals, Relight, AI Upscale, Remove Object (LaMa), Colorize B&W, Neural Style, Low-Light Enhance, AI Line Art, AI Denoise, Sky Mask, Sky Replace, Face Detection & Landmarks, Face Restoration, Pose / Body, Smart Auto-Crop (models run in the browser, see [docs/AI.md](docs/AI.md)) |
+| **AI** | Depth Map, Subject Mask, Depth Fog, Click Select (SAM), Scene Segmentation, Surface Normals, Relight, AI Upscale, Remove Object (LaMa), Colorize B&W, Neural Style, Low-Light Enhance, AI Line Art, AI Denoise, Sky Mask, Sky Replace, Face Detection & Landmarks, Face Restoration, Pose / Body, Smart Auto-Crop, Select by Text, Text Mask (CLIPSeg), Caption & OCR, Optical Flow, Frame Interpolation (RIFE), Smooth Slow Motion, Style from Image, Background Removal (BiRefNet) (models run in the browser, see [docs/AI.md](docs/AI.md)) |
 | **ControlNet** | Canny, Soft Edge, Scribble, M-LSD Lines, Lineart, Depth, Normal Map, OpenPose, Segmentation, Content Shuffle, Tile / Blur, Color Grid, Inpaint Mask, Control Sheet, Generate (Stable Diffusion) (see [docs/CONTROLNET.md](docs/CONTROLNET.md)) |
 
 ## Custom nodes & plugins
@@ -363,6 +374,17 @@ node scripts/snap.mjs out.png 'node=effects.kuwahara&params={"radius":8}'
   [ONNX by Heliosoph](https://huggingface.co/Heliosoph/scunet-onnx)) and the SkySeg U²-Net from
   [xiongzhu666/Sky-Segmentation-and-Post-processing](https://github.com/xiongzhu666/Sky-Segmentation-and-Post-processing)
   (MIT; [fp16 ONNX by voyagerfromeast](https://huggingface.co/voyagerfromeast/skyseg)).
+- Vision-language models: [OWLv2 / OWL-ViT](https://huggingface.co/google/owlv2-base-patch16-ensemble) (Minderer et al., Google, Apache-2.0),
+  [CLIPSeg](https://huggingface.co/CIDAS/clipseg-rd64-refined) (Lüddecke & Ecker, Apache-2.0) and
+  [CLIP ViT-B/32](https://github.com/openai/CLIP) (Radford et al., OpenAI, MIT), ONNX exports by Xenova;
+  [Florence-2 base](https://huggingface.co/microsoft/Florence-2-base-ft) (Xiao et al., Microsoft, MIT; ONNX by onnx-community).
+- Motion, style and matting models: [NeuFlow v2](https://github.com/neufieldrobotics/NeuFlow_v2) (Zhang et al., Apache-2.0;
+  [ONNX by ikeboo](https://huggingface.co/bukuroo/NeuFlowV2-ONNX), MIT), [RAFT](https://github.com/princeton-vl/RAFT)
+  (Teed & Deng, BSD-3-Clause; [OpenCV zoo](https://huggingface.co/opencv/optical_flow_estimation_raft)),
+  [RIFE 4.25 lite](https://github.com/hzwer/Practical-RIFE) (Huang et al., MIT; [ONNX by t9749](https://huggingface.co/t9749/rife-4.25-lite-onnx)),
+  [AdaIN](https://github.com/naoto0804/pytorch-AdaIN) (Huang & Belongie; PyTorch port by N. Inoue, MIT;
+  [weights](https://huggingface.co/BhupatiNadar/adain-style-transfer-models)) and
+  [BiRefNet lite](https://github.com/ZhengPeng7/BiRefNet) (Zheng et al., MIT; [512² ONNX by Studio Ludens](https://huggingface.co/studioludens/birefnet-lite-512)).
 - People models: [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe) 0.10.35 with the Face Landmarker,
   Pose Landmarker and Selfie Multiclass models (Google, Apache-2.0),
   [YuNet](https://huggingface.co/opencv/face_detection_yunet) (Wu et al., OpenCV Zoo, MIT),

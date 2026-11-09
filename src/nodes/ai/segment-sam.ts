@@ -17,7 +17,7 @@ const MEAN = [0.485, 0.456, 0.406];
 const STD = [0.229, 0.224, 0.225];
 const MASKS = ['Auto (best score)', 'Mask 1', 'Mask 2', 'Mask 3'];
 
-interface Embedding {
+export interface Embedding {
   emb: Float32Array;
   embDims: number[];
   pos: Float32Array;
@@ -40,6 +40,48 @@ function lowRes(w: number, h: number): [number, number] {
   const [fw, fh] = frame(w, h);
   return [Math.max(1, Math.round(fw / 4)), Math.max(1, Math.round(fh / 4))];
 }
+
+/**
+ * SAM image embedding of `src` from the shared memo (the same entry Click Select uses), for other nodes that feed
+ * SAM their own prompts (e.g. ai.textSelect's detected boxes). `w`/`h` of the result = the image inside the 1024² frame.
+ */
+export function samEmbedding(src: RawTex, signal?: AbortSignal): Promise<Embedding> {
+  const [w, h] = frame(src.width, src.height);
+  const rgb = resampleRGB(src.data, src.width, src.height, w, h);
+  return memo.get('slimsam', fingerprint(rgb, w, h), Math.max(src.width, src.height), SIZE, () => encode(rgb, w, h), signal);
+}
+
+/**
+ * Run the prompt decoder on several prompts at once (SAM's point batch). Points are 0..1 of the image, label 1 = include,
+ * 0 = exclude. Returns per prompt the three IoU predictions and the three 256² mask logits (covering the 1024² frame).
+ */
+export async function samDecodeBatch(E: Embedding, prompts: { x: number; y: number; l: number }[][]): Promise<{ scores: Float32Array; masks: Float32Array; size: number }> {
+  const n = Math.max(1, ...prompts.map((p) => p.length));
+  const coords = new Float32Array(prompts.length * n * 2);
+  const labels = new Float32Array(prompts.length * n).fill(-10); // -10 = padding point (ignored)
+  prompts.forEach((pp, i) =>
+    pp.forEach((p, j) => {
+      coords[(i * n + j) * 2] = p.x * E.w;
+      coords[(i * n + j) * 2 + 1] = p.y * E.h;
+      labels[i * n + j] = p.l;
+    }),
+  );
+  const r = await runModelMulti(
+    'slimsam-decoder',
+    {
+      input_points: { data: coords, dims: [1, prompts.length, n, 2] },
+      input_labels: { data: labels, dims: [1, prompts.length, n], type: 'int64' },
+      image_embeddings: { data: E.emb.slice(), dims: E.embDims },
+      image_positional_embeddings: { data: E.pos.slice(), dims: E.posDims },
+    },
+    ['iou_scores', 'pred_masks'],
+  );
+  if (!r.iou_scores || !r.pred_masks) throw new Error('SAM decoder returned no masks');
+  return { scores: r.iou_scores.data, masks: r.pred_masks.data, size: r.pred_masks.dims[r.pred_masks.dims.length - 1] };
+}
+
+/** Low-res mask size (the part of SAM's 256² output covering the image) for an image of w×h. */
+export const samLowRes = (w: number, h: number) => lowRes(w, h);
 
 async function encode(rgb: Float32Array, w: number, h: number): Promise<Embedding> {
   const n = SIZE * SIZE;

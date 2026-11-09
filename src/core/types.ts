@@ -142,6 +142,8 @@ export interface CpuContext {
    * jobs (tiled AI) should check it between steps and stop early. See InferenceMemo for sharing.
    */
   signal?: AbortSignal;
+  /** Engine (flat) id of the node being evaluated; e.g. for setNodeInfo() in src/core/nodeInfo.ts. */
+  nodeId?: string;
 }
 
 export interface NodeDef {

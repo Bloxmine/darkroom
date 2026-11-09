@@ -463,6 +463,7 @@ export class Engine {
     try {
       const r = def.cpu!({
         signal: entry.ctl!.signal,
+        nodeId: node.id,
         params: node.params,
         scale,
         projectSize,

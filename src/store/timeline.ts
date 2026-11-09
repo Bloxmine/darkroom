@@ -13,6 +13,8 @@ import { engine, renderImmediately, requestRender } from './engine';
  */
 export const VIDEO = 'core.video';
 export const WEBCAM = 'core.webcam';
+/** Other video-file sources (own decoders, same params as core.video): they also put the project in motion and set its length. */
+export const VIDEO_LIKE = new Set([VIDEO, 'ai.videoSlowMo', 'core.videoFrameOffset']);
 
 export interface TimelineState extends Required<TimelineSettings> {
   /** Seconds. */
@@ -90,7 +92,7 @@ let lastVideoSig = '';
 function scanGraph(applyAuto: boolean) {
   const p = useDoc.getState().project;
   const flat = flattenGraph(p.graph);
-  const vids = flat.nodes.filter((n) => n.type === VIDEO && !n.bypass);
+  const vids = flat.nodes.filter((n) => VIDEO_LIKE.has(n.type) && !n.bypass);
   const cams = flat.nodes.filter((n) => n.type === WEBCAM && !n.bypass);
   releaseVideoSources(new Set(vids.map((n) => String(n.params.asset ?? ''))));
   releaseWebcams(new Set(cams.map((n) => webcamKey(String(n.params.device ?? 'default'), String(n.params.resolution ?? '1280x720')))));
@@ -262,6 +264,14 @@ async function step(now: number) {
     }
   }
   renderImmediately();
+  // Every frame: let async steps (AI nodes such as optical flow / datamosh / slow motion) finish, so each frame
+  // is complete before the next one starts (realtime playback keeps dropping frames instead)
+  if (s.playing && !s.realtime && engine) {
+    for (let k = 0; k < 6 && engine.cpuBusy; k++) {
+      await engine.whenCpuIdle();
+      renderImmediately();
+    }
+  }
 }
 
 // test / console hook

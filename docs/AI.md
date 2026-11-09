@@ -854,6 +854,404 @@ in Chromium (Metal WebGPU).
   under-expose a photo. Use *Exposure* or the intensities.
 - **Spot lights** aim straight into the scene (−z), not at a target.
 
+## Motion, interpolation, style from image and matting
+
+| Node | Id | Outputs | What it does |
+|---|---|---|---|
+| Optical Flow | `ai.opticalFlow` | `flow` (float RG motion), `viz` (Middlebury colour wheel) | Per-pixel motion from frame A to frame B: NeuFlow v2 (default, WebGPU) or RAFT (CPU) |
+| Flow Motion Blur | `effects.flowMotionBlur` (category Motion) | `out` | Directional blur along the flow, with a shutter angle |
+| Flow Warp | `effects.flowWarp` (Motion) | `out` | Moves the image along the flow × amount |
+| Datamosh | `effects.datamosh` (Motion) | `out` | I-frame removal: the previous output dragged along the flow in macroblocks, accumulated over frames |
+| Frame Interpolation (RIFE) | `ai.frameInterp` | `out` | The in-between frame at time t between frames A and B |
+| Smooth Slow Motion (RIFE) | `ai.videoSlowMo` (category Input) | `out` | A Video source whose in-between times (speed < 1) are RIFE frames instead of repeated ones |
+| Video Frame (offset) | `core.videoFrameOffset` (Input) | `out` | A video N source frames before/after the timeline time, with its own decoder |
+| Style from Image | `ai.styleFromImage` | `out` | AdaIN arbitrary style transfer from any `style` image |
+| Background Removal (BiRefNet) | `ai.matte` | `mask`, `cutout` (RGBA) | BiRefNet lite matte, optional edge tiles, foreground colour decontamination |
+
+**`ai.opticalFlow`:** inputs `a` (earlier frame, optional) and `b` (current frame).
+- `model`: *NeuFlow v2 (fast)* (768×432) or *RAFT (WASM only)* (Sintel weights, 480×360). Both exports have fixed
+  input sizes: frames are resampled to them and the flow is scaled back.
+- `refine`: joint-bilateral upsampling of the flow against B, so motion edges follow object edges.
+- `vizMax`: px of motion drawn fully saturated in `viz`; 0 = auto (99.5th percentile × 1.1).
+- **The `flow` encoding:** RGBA float on B's pixel grid. R, G = motion of the content from A to B, divided by the image
+  width / height (so it works at any render scale). B is predicted by sampling A at `uv − flow(uv)`.
+  The network is run as (image1 = B, image2 = A) and negated, which gives exactly that backward-warp field.
+- `viz` is the Middlebury colour wheel (Baker et al. 2011; the same 55-entry wheel as the OpenCV zoo demo):
+  hue = direction, saturation = speed, white = still.
+
+**Multi-frame inputs (design).** A node only sees its inputs at the engine's single current time, so "the previous
+frame" needs either a second source or memory:
+- **History (the default; `a` unconnected).** During playback and export the engine evaluates frames in order, so the
+  node keeps the last few B frames it saw (per node id, model and content) and uses the one from frame f−1 (or up to
+  f−3 when realtime playback dropped frames) as A. It works for any upstream graph: a Video, a Webcam, a graded or
+  cropped video, and inside presets, which only have one `image` input. On a jump in time (scrub, first frame, a still
+  at frame 0) there is no previous frame and the flow is zero, so every flow effect is the identity.
+- **Video Frame (offset)** (`core.videoFrameOffset`, offset −1) into `a` gives exact pairs at any time, including while
+  scrubbing. It has its own `VideoDecoderSource` (`privateDecoder()` in `flowSource.ts`): sampling the clip at t − 1/fps
+  through the shared decoder would seek backwards on every frame, and each backward seek restarts at a keyframe.
+- Rejected: a `video` asset param on the flow node (only works on raw video, not after other nodes, nor on webcams or in
+  presets), and an engine-level "evaluate upstream at t − dt" node (changes engine.ts, and needs every upstream source to
+  decode two times per frame).
+- **Every frame** playback now waits for async node work (AI) before advancing (`timeline.ts`), so each frame is
+  complete; **Realtime** still drops frames (history then spans up to 3 frames).
+
+**`effects.flowMotionBlur`:** `shutter` (°; 180 = half the frame-to-frame motion, like a film camera), `amount`
+(motion scale), `maxBlur` (px), `samples`, `centered` (around the pixel, or trailing).
+
+**`effects.flowWarp`:** `amount` (1 with frame A as the image predicts B; 0.5 lands half-way), `steps` (follows the
+field in several short steps).
+
+**`effects.datamosh`:** `keyframe` (I-frame every N frames; 0 = only at the start or after a jump in time), `block`
+(macroblock px: one motion vector per block), `gain`, `bleed` (how much of the real frame leaks in per frame), `mix`.
+The accumulation runs on the CPU (≤ 1280 px long side), with the state kept per node id and frame, so re-evaluating a
+frame (a parameter change, the flow arriving late) recomputes it from the previous frame's state. Frame 0 / stills pass
+through.
+
+**`ai.frameInterp`:** inputs `a` (t = 0) and `b` (t = 1); `t`; `resolution` (max short side for RIFE: Full / 1080 /
+720 / 540). Within 0.001 of an end the source frame is used without inference. Frames are edge-padded to multiples of
+64 (the network's requirement) and cropped back.
+
+**`ai.videoSlowMo`:** the Video node's params (`asset`, `start`, `end`, `speed` default 0.5, `loop`) plus `resolution`.
+For timeline time t it takes the source time s (trim, speed, loop as in `core.video`), finds the decoded frame k whose
+interval contains s and the next one, and runs RIFE at (s − ts_k) / duration_k. Decoded frames are cached (6), so a ×4
+slow motion decodes each source frame once; its decoder only moves forward during playback and export.
+
+**Export Video › Slow motion** (*Smooth slow motion ×2 / ×4 (AI frame interpolation)*): `exportVideo()` swaps every
+`core.video` node (also inside groups) for `ai.videoSlowMo` at speed ÷ factor (`slowMoGraph()`), and renders
+duration × factor seconds at the chosen fps. Effects downstream run on every interpolated frame. Audio is skipped.
+The export loop now also waits for chains of async nodes (up to 8 rounds, e.g. slow-motion source → flow → datamosh).
+
+**`ai.styleFromImage`:** inputs `image` and `style`.
+- `strength`: AdaIN's content–style trade-off, applied in feature space.
+- `styleScale`: short side the style image is resized to (256–1024); smaller gives bigger strokes and patterns.
+- `resolution`: content short side (384–1024, long side ≤ 2×, multiples of 8).
+- `preserveColor`: stylised luminance with the original chroma (YCbCr).
+- `mix`: blend with the original image.
+- Pipeline: VGG-19 encoder (relu4_1) on the style, then per-channel mean/std, cached per style image and style
+  scale. The encoder also runs on the content, and those features are cached per image and size. AdaIN then runs in JS,
+  followed by the decoder. Changing `strength` re-runs only the decoder; a new photo with the same painting doesn't
+  re-analyse the painting.
+
+**`ai.matte`:**
+- `resolution`: *512*, or *High detail (512 + 3×3 tiles)*. High detail is a global 512² pass plus a 3×3 grid of
+  overlapping 512² tiles of a 1280² stretch. The tiles are only used in the global matte's edge band (where a 9×9
+  neighbourhood has both fore- and background), so they can't add stray objects. It costs 10 inferences.
+- `refine`: joint-bilateral against the image.
+- `threshold` / `softness`.
+- `decontaminate`, with `spillRadius` (px): foreground colour estimation by Blur-Fusion (Forte & Pitié, ICIP 2021).
+  There are two iterations: the large radius at ¼ resolution, then 6 px at full resolution. Every pixel is unmixed as
+  F = F̂ + α(I − αF̂ − (1−α)B̂), where F̂ and B̂ are α-weighted local means. This removes the old background's colour
+  from hair and semi-transparent edges.
+- `invert`: `mask` only.
+- `cutout` is RGBA (alpha = matte, not premultiplied).
+
+### Presets (`src/presets/ai-motion.ts`)
+- `ai.datamoshVideo`: flow (NeuFlow v2, history) → Datamosh. Knobs: I-frame interval, macroblock, motion gain, bleed, mix, flow model.
+- `ai.motionBlurFlow`: flow (NeuFlow v2, refine 0.6) → Flow Motion Blur. Knobs: shutter angle, motion scale, max blur, samples, centred, flow model, edge refine.
+- `ai.paintingFromImage`: Style from Image → vibrance → canvas grain. It has a **second group input `style`** for the
+  painting (unconnected = passthrough). Knobs: style strength, brush scale, detail, keep photo colours, mix, vibrance, grain.
+- `ai.hairCutout`: Background Removal (High detail, decontaminate 1) over a solid colour (alpha 0 = transparent).
+  Knobs: resolution, edge refine, threshold, softness, decontamination and its radius, background.
+
+### Models (`src/core/ai/models-motion.ts`)
+
+| Model | File | Size | Licence | Source |
+|---|---|---|---|---|
+| NeuFlow v2 (mixed) | `neuflow_mixed.onnx` (fixed 1×3×432×768, input 0..1) | 42.2 MB | Apache-2.0 (NeuFlow v2) / MIT (export) | [bukuroo/NeuFlowV2-ONNX](https://huggingface.co/bukuroo/NeuFlowV2-ONNX) @ `6b92f2df` |
+| RAFT (Sintel) | `optical_flow_estimation_raft_2023aug.onnx` (fixed 480×360, input 0..255) | 64.1 MB | BSD-3-Clause (RAFT) / MIT (PINTO0309 conversion) | [opencv/optical_flow_estimation_raft](https://huggingface.co/opencv/optical_flow_estimation_raft) @ `06ce4aec` |
+| RIFE 4.25 lite | `rife_v425lite.onnx` (dynamic H×W, multiples of 64) | 22.7 MB | MIT | [t9749/rife-4.25-lite-onnx](https://huggingface.co/t9749/rife-4.25-lite-onnx) @ `8d1488a8` |
+| AdaIN VGG-19 encoder | `vgg_normalized.pth` (graph built in the browser) | 80.1 MB | MIT | [BhupatiNadar/adain-style-transfer-models](https://huggingface.co/BhupatiNadar/adain-style-transfer-models) @ `52de1b15` |
+| AdaIN decoder | `decoder_final.pth` (graph built in the browser) | 14.0 MB | MIT | same repo and commit |
+| BiRefNet lite 512² | `onnx/model_fp16.onnx` (fp16 weights, fp32 I/O, logits) | 98.5 MB | MIT | [studioludens/birefnet-lite-512](https://huggingface.co/studioludens/birefnet-lite-512) @ `962e6796` |
+
+All URLs serve `access-control-allow-origin: *` (checked with `curl -I -H Origin:`). Upstream licences were checked on
+GitHub too: NeuFlow_v2 Apache-2.0, princeton-vl/RAFT BSD-3-Clause, hzwer/Practical-RIFE MIT, naoto0804/pytorch-AdaIN
+MIT, ZhengPeng7/BiRefNet MIT.
+
+Notes on the choices:
+- **RAFT is pinned to WASM.** On WebGPU (ORT 1.31) it runs without an error but the flow is wrong. Already the 1/8-resolution
+  iterations differ from WASM by up to 14 px on the test pair (probably its GatherElements bilinear lookup). Because the
+  WebGPU run doesn't fail, the runtime can't fall back by itself. NeuFlow v2 on WebGPU matches WASM (max diff 1e-4), so it
+  is the default. On a synthetic pan + moving box, both models agree with phase correlation to 0.1 px.
+- **AdaIN.** The VGG file is byte-identical (SHA-256 `804ca283…`) to naoto0804's v0.0.0 release `vgg_normalised.pth`.
+  The decoder is a re-trained pytorch-AdaIN decoder (MIT card); its results look like the original release's decoder on
+  the same inputs. `styleImageOnnx.ts` reads each conv tensor at a fixed byte offset of the pinned files (legacy torch
+  format / stored zip) and writes the ONNX graph (reflect Pad, Conv, ReLU, MaxPool / nearest Resize, opset 13). The built
+  graphs match PyTorch: max diff 2.4e-5 (encoder) and 4.9e-6 (decoder) on random input.
+- **BiRefNet: the 1024² exports don't fit in the browser.** onnx-community `BiRefNet_lite-ONNX` (MIT; 115 MB fp16 /
+  224 MB fp32) needs ≈7 GB at run time (measured peak RSS in onnxruntime CPU). ORT-web WASM dies with `std::bad_alloc`, and
+  WebGPU fails a kernel. The Studio Ludens 512² re-export of the same BiRefNet_lite weights peaks at ≈2 GB and runs on WASM.
+  On WebGPU, one kernel fails WGSL validation (`no matching constructor for i32(vec4<u32>)`) and the run returns a
+  near-black matte **without an error**, so the model is `wasmOnly`. The High-detail tiles bring back resolution.
+- **Rejected:**
+  - Magenta arbitrary image stylization ONNX (`nkyygitt/magenta-style-transfer-onnx`): no licence on the card, and
+    content fixed at 256².
+  - Other AdaIN uploads: no licence, or training snapshots.
+  - FILM: no permissive ONNX export found.
+  - Other RIFE exports: `FuryTMP/RIFE_fp32` doesn't say which version or what the I/O is; `square-zero-labs` has no licence.
+  - BiRefNet full / portrait / 512×512 (Swin-L, 470–970 MB).
+  - RMBG: non-commercial.
+  - RAFT int8bq: block-quantised DequantizeLinear.
+
+Attribution:
+- NeuFlow v2: Z. Zhang, A. Gupta, H. Jiang, H. Singh, *NeuFlow v2: High-Efficiency Optical Flow Estimation on Edge
+  Devices*, 2024. [github.com/neufieldrobotics/NeuFlow_v2](https://github.com/neufieldrobotics/NeuFlow_v2).
+- RAFT: Z. Teed, J. Deng, *RAFT: Recurrent All-Pairs Field Transforms for Optical Flow*, ECCV 2020.
+- RIFE: Z. Huang, T. Zhang, W. Heng, B. Shi, S. Zhou, *Real-Time Intermediate Flow Estimation for Video Frame
+  Interpolation*, ECCV 2022. [github.com/hzwer/Practical-RIFE](https://github.com/hzwer/Practical-RIFE).
+- AdaIN: X. Huang, S. Belongie, *Arbitrary Style Transfer in Real-time with Adaptive Instance Normalization*, ICCV 2017;
+  PyTorch port by N. Inoue ([naoto0804/pytorch-AdaIN](https://github.com/naoto0804/pytorch-AdaIN)).
+- BiRefNet: P. Zheng, D. Gao, D.-P. Fan, L. Liu, J. Laaksonen, W. Ouyang, N. Sebe, *Bilateral Reference for
+  High-Resolution Dichotomous Image Segmentation*, CAAI AIR 2024.
+- Blur-Fusion: M. Forte, F. Pitié, *Approximate Fast Foreground Colour Estimation*, ICIP 2021.
+- Middlebury colour coding: S. Baker et al., *A Database and Evaluation Methodology for Optical Flow*, IJCV 2011.
+
+### Timings
+The machine is an Apple-silicon Mac with ORT 1.31.1, in a worker, warm (3rd run). The WebGPU column is real Metal
+(Playwright `channel: 'chromium'`). The WASM columns are 1 thread (no COOP/COEP) and 4 threads (COOP/COEP).
+
+| Model / input | WebGPU | WASM 1 thread | WASM 4 threads |
+|---|---|---|---|
+| NeuFlow v2, 768×432 | ≈0.19 s | ≈4.1 s | ≈1.5 s |
+| RAFT, 480×360 | runs on WASM | ≈6.1 s | ≈2.2 s |
+| RIFE 4.25 lite, 960×576 | ≈0.15 s (≈0.10 s in a long export) | ≈0.9 s | ≈0.34 s |
+| RIFE 4.25 lite, 1920×1088 | ≈0.58 s | ≈3.5 s | ≈1.2 s |
+| AdaIN encoder, content 1152×768 | ≈0.36 s | ≈9.6–10.3 s | ≈2.5 s |
+| AdaIN encoder, style 640×512 | ≈0.13 s | ≈3.5 s | ≈0.93 s |
+| AdaIN decoder → 1152×768 | ≈0.51 s | ≈9.8 s | ≈2.6 s |
+| BiRefNet lite 512² | runs on WASM | ≈5.2 s | ≈1.5–1.7 s |
+
+End to end (WebGPU where possible):
+- Datamosh preset export, 3 s of 960×540 at 30 fps: 25 s (90 frames).
+- *Every frame* playback of the datamosh preset: ≈3.4 fps.
+- ×2 slow-motion export of 1 s at 960×540: 5.8–11 s (60 frames).
+- ×4 slow-motion export of 0.5 s: 7.3 s (60 frames).
+- Background Removal: ≈6 s at 512. High detail: ≈60 s on 1 thread, roughly 3× faster with 4 threads.
+
+### Verification (motion / matting)
+- `src/nodes/ai/flowMath.test.ts` covers:
+  - the colour wheel against the Python reference values;
+  - the flow encoding sign and units;
+  - the robust maximum;
+  - bilinear sampling and backward warp by a constant flow (amount 1, 0.5, −1);
+  - macroblocks;
+  - the hash.
+- `src/nodes/ai/interpMath.test.ts` covers:
+  - timestep snapping and clamping;
+  - the timestep between decoded frames;
+  - the ×2/×4 schedule against the slow-motion source's time mapping;
+  - padding to 64 and the crop back.
+- **Held-out slow motion.** A 60 fps synthetic clip (pan + zoom of a landscape with a portrait moving over it) was
+  reduced to 30 fps and exported ×2. The in-between frames scored PSNR 28.4 dB (minimum 26.1 dB) against the dropped
+  60 fps frames, against 25.3 dB for a cross-fade and 22.9 dB for frame repetition. ×4 at t = 0.5 scored 28.2 dB. Every
+  in-between frame differs from both neighbours. The exported file has 60 frames over 2.0 s (`ffprobe -count_frames`).
+
+### Known gaps (motion / matting)
+- **Datamosh softens over time.** Its accumulation resamples bilinearly every frame, so long runs without an I-frame
+  grow soft. The I-frame interval or a little bleed brings the detail back.
+- **History needs order.** Previous-frame mode needs frames in order: scrubbing shows zero flow (wire Video Frame
+  (offset) into A for that). It is in-memory per session.
+- **Fixed flow resolutions.** The flow models run at 768×432 / 480×360 whatever the video size. Small fast details
+  (thin poles, hair) get the motion of their surroundings. The refine helps at edges.
+- **Slow-motion audio.** Smooth slow motion drops audio. It interpolates the *source* video, so effects downstream
+  are rendered on the synthetic frames. Scene cuts produce a morph between the two shots.
+- **RAFT is slow.** RAFT only runs on the CPU (wrong results on WebGPU), at 2–6 s per frame.
+- **BiRefNet resolution.** BiRefNet runs at 512² on WASM (~5 s per inference single-threaded), and High detail is 10
+  inferences. Without tiles, fine hair is softer than with MODNet's portrait matte. BiRefNet doesn't count objects held
+  in front of a person (the bouquet in `portrait.jpg`) as part of the subject.
+- **AdaIN's look.** AdaIN shows the usual VGG grid texture at small style scales and repaints the whole frame
+  uniformly, with no semantic awareness.
+- **Not tested on real footage.** No real-world (non-synthetic) video was tested: the frame-interpolation numbers come
+  from synthetic rigid motion.
+
+## Vision-language: text prompts, captions, OCR, CLIP search
+
+| Node | Id | Outputs | What it does |
+|---|---|---|---|
+| Select by Text | `ai.textSelect` | `mask`, `overlay` | OWLv2 open-vocabulary detection finds what the prompt names; SAM traces each box |
+| Text Mask (CLIPSeg) | `ai.textMask` | `mask` | Soft region masks from words (“sky”, “water”, “skin”), union / subtract, matted to the image |
+| Caption & OCR | `ai.caption` | `out`, `overlay`, `mask` | Florence-2: caption, detailed caption, OCR (± regions), object detection, phrase grounding |
+
+**`ai.textSelect` params:**
+- `prompt`: what to select. Commas separate objects (“red jacket, paddle”); a leading `-` subtracts an object (“person, -paddle”).
+- `threshold` (*Box threshold*, default 0.1): minimum detection score (sigmoid of OWL's logit).
+- `maxObjects`, `keep` (*All matches* / *Best match* / *Nth match*), `nth`.
+- `refine` (*Refine with SAM*, on): trace each box with SlimSAM. Off = the filled boxes.
+- `threshold2` (*Mask threshold*), `softness`, `edges` (edge-aware upsampling), `feather`, `invert`.
+- `model`: *OWLv2 B/16 (accurate)* (default) or *OWL-ViT B/32 (fast)*.
+- `tint`: colour of the selection in `overlay`. The overlay draws every found box with its label and score; kept boxes are solid, found-but-not-kept ones dashed.
+
+How it works:
+- **Image once, prompt cheap.** The OWL ONNX export is a single graph that takes image and text together. At load time
+  `extractGraph()` (`src/core/ai/vl/onnx-split.ts`, a browser port of `onnx.utils.extract_model`) cuts the one
+  download into an image part (outputs: normalised class embeddings, logit shift, logit scale, `pred_boxes`) and a text
+  part (normalised text embeddings). The small class head that mixes them runs in JS (`owlLogits` in `vl/boxes.ts`).
+  So the image is encoded once per image (`InferenceMemo` by fingerprint), each prompt only runs the text tower
+  (≈15–70 ms, cached per text), and threshold / count / keep are pure post-processing. The split was checked against
+  the full graph in onnxruntime: max |Δlogit| 7e-6, boxes identical.
+- **Post-processing:** per patch the best query (sigmoid), threshold, cx cy w h → x0 y0 x1 y1, rescale from OWLv2's
+  square-padded frame to the image, class-wise NMS (IoU 0.3). Patches over the grey padding, and a few border patches
+  that the q4f16 export makes degenerate (identical features, centre on the frame edge, ≈100 %), are dropped.
+- **SAM refinement** reuses Click Select's cached SAM embedding (`samEmbedding()` / `samDecodeBatch()` exported from
+  `segment-sam.ts`, same memo). This SAM export has no box prompt, so nine positive points inside the box (centre,
+  diagonals, mid-lines) are decoded in one point batch; of the 27 proposals the one whose bounding box fits the
+  detection best wins (`boxFitScore`: IoU of the mask's bounding box with the box − the share of the mask outside the
+  box grown by 8 % + 0.15 × SAM's IoU prediction). The mask is clipped to the grown box. Memoised per image + box.
+
+**`ai.textMask` params:** `prompt` (commas = union, `-x` = subtract: `m · Π(1 − subtract·n)`), `normalize` (stretch
+each positive prompt's map to its own peak; on by default, CLIPSeg is often unsure on photos), `subtract`,
+`threshold`, `softness`, `edges` (joint-bilateral upsampling of the 352² map), `refine` / `radius` / `eps` (guided-filter
+matting on luma, He et al. 2010), `feather`, `invert`. CLIPSeg is split three ways (image activations of layers 3/6/9
+after the decoder's reduce layers, the FiLM text conditioning, and the 1.2 MB decoder), so a new prompt is a text pass
+plus a decode (≈50 ms). The split is exact (max |Δ| = 0 in onnxruntime). One cut tensor is the batch size as an int64
+shape value; it is always 1 and fed as a constant.
+
+**`ai.caption` params:** `task` (*Caption*, *Detailed caption*, *More detailed caption*, *OCR*, *OCR with regions*,
+*Object detection*, *Phrase grounding*), `phrase` (grounding input), `samMask` (trace boxes with SAM for `mask`),
+mask threshold / softness / edges / feather / invert, `tint` (used for grounding only).
+- The answer appears below the parameters in the Properties panel, read-only, with **Copy text** and, for *Caption*,
+  **Use as project name** (article and final period dropped).
+- `out` passes the image through, so the node can sit in a chain; `overlay` draws boxes / OCR quads with labels.
+- Pipeline (`vl/florence.ts`, as transformers' Florence2ForConditionalGeneration): 768² squash → DaViT vision encoder
+  (577 tokens) → `[image tokens, embed(prompt)]` → BART encoder → merged decoder with KV cache, greedy with a
+  no-repeat-3-gram rule (the model's config asks for 3 beams; greedy is 3× cheaper and matched the reference captions).
+  The merged decoder's bool `use_cache_branch` input is re-typed to float by `castInputs()` at load time, because the
+  session host only sends float32 / int64 tensors. The answers are memoised per image + task + phrase.
+- Location tokens `<loc_N>` are bins over the squashed image: coordinate = (N + 0.5) / 1000 (`vl/florence-post.ts`).
+- Not optional / not gated: with the vision encoder on WebGPU an answer takes ≈2–5 s; WASM-only adds ≈10 s for the image once (well under the 30 s budget).
+
+### Preset Browser: CLIP look search
+- **Describe a look…** (a second search field; press Enter): ranks the presets by CLIP similarity between the text
+  and each preset's live thumbnail, e.g. “faded 90s camcorder”, “moody cyan night”, “newspaper print”. The text is
+  wrapped as “a photo, …”. The score (×100) is shown next to the category.
+- **≈ more like this** (on hover, on every tile): ranks by image–image similarity to that preview.
+- All thumbnails show the same photo, so raw CLIP similarity is dominated by the photo's content. Scores therefore use
+  each embedding minus the mean of the visible thumbnails' embeddings (once ≥ 6 are embedded), i.e. what is specific
+  to each look.
+- Lazy and off by default: nothing loads until a query is entered; the first query downloads CLIP (154 MB, through the
+  consent prompt). Thumbnails are embedded one at a time as they render (≈0.2 s each on WASM), cached per preset +
+  thumbnail input key (the graph / viewed-node state the preview was rendered from); text embeddings per text.
+- Code: `src/core/ai/vl/clip.ts`, `src/core/ai/vl/presetRank.ts` (React hook), a few lines in `PresetBrowser.tsx`.
+
+### Presets (`src/presets/ai-vl.ts`)
+All expose the prompt as a knob.
+- `ai.textRecolor` *Recolour by Text*: Select by Text → Hue / Saturation, mixed through the mask. Knobs: prompt, hue, saturation, lightness, keep, box threshold, feather, amount.
+- `ai.textBlurBackground` *Blur All But…*: Select by Text (best match, inverted) → Lens Blur amount. Knobs: prompt, keep, blur, bokeh highlights, blades, box threshold, feather.
+- `ai.textCutout` *Cut Out by Text*: Select by Text → Alpha from Mask. Knobs: prompt, keep, N, box threshold, mask threshold, feather.
+
+### Tokenizers (`src/core/ai/vl/tokenizer.ts`)
+Own TypeScript BPE tokenizers instead of `@huggingface/transformers`: that package bundles its own onnxruntime-web
+(a second ≈25 MB of wasm next to the app's 1.31.1, in another version) plus its own model loading and caching, and
+the app only needs two tokenizers. They read the Hugging Face `tokenizer.json`, fetched through the model cache
+(`vl/text.ts` → `runtime.download`), so prompts work offline after the first use.
+- **CLIP BPE** (CLIP, OWL-ViT, OWLv2, CLIPSeg share one vocab; the 2.2 MB file comes from `Xenova/clip-vit-base-patch32`):
+  NFC, whitespace collapse, lower case, CLIP's word split, GPT-2 byte alphabet, BPE with the `</w>` suffix,
+  `<|startoftext|> … <|endoftext|>`. OWL pads to 16 tokens with id 0 plus an attention mask.
+- **Byte-level BPE** (Florence-2 / BART): GPT-2 pre-tokenizer regex, byte alphabet, BPE, `<s> … </s>`, the 1029 added
+  tokens (`<loc_N>`, `<od>`, …) matched before BPE and decoded verbatim.
+- Tests (`tokenizer.test.ts`) compare ids with the HF `tokenizers` library on fixtures cut from the real files (the vocab
+  entries and merges that can occur in the test strings, in their original order). A one-off check on 614 random
+  phrases against the full files matched every id.
+
+### Models (`src/core/ai/models-vl.ts`)
+
+| Model | File(s) used | Size | Licence | Source |
+|---|---|---|---|---|
+| OWLv2 B/16 ensemble | `onnx/model_quantized.onnx` (int8: text part always, image part on WASM); `onnx/model_q4f16.onnx` (image part on WebGPU) | 155.3 / 128.4 MB | Apache-2.0 | [Xenova/owlv2-base-patch16-ensemble](https://huggingface.co/Xenova/owlv2-base-patch16-ensemble) @ `3e255bc9` (from [google/owlv2-base-patch16-ensemble](https://huggingface.co/google/owlv2-base-patch16-ensemble)) |
+| OWL-ViT B/32 (option) | same pattern | 155.4 / 127.3 MB | Apache-2.0 | [Xenova/owlvit-base-patch32](https://huggingface.co/Xenova/owlvit-base-patch32) @ `b75f4e52` (from google/owlvit-base-patch32) |
+| CLIPSeg rd64 refined | `onnx/model_quantized.onnx` (int8, WASM) | 139.1 MB | Apache-2.0 | [Xenova/clipseg-rd64-refined](https://huggingface.co/Xenova/clipseg-rd64-refined) @ `924dc94f` (from CIDAS/clipseg-rd64-refined) |
+| Florence-2 base ft | `vision_encoder_fp16.onnx` (WebGPU) or `vision_encoder_quantized.onnx` (WASM); `embed_tokens_quantized`, `encoder_model_quantized`, `decoder_model_merged_quantized` (WASM) | 183.9 or 93.7 + 39.4 + 43.7 + 98.2 MB | MIT | [onnx-community/Florence-2-base-ft](https://huggingface.co/onnx-community/Florence-2-base-ft) @ `e88a44ea` (from microsoft/Florence-2-base-ft) |
+| CLIP ViT-B/32 | `onnx/vision_model_quantized.onnx` + `onnx/text_model_quantized.onnx` (WASM) | 89.1 + 64.5 MB | MIT | [Xenova/clip-vit-base-patch32](https://huggingface.co/Xenova/clip-vit-base-patch32) @ `6b7c5237` (from openai/clip-vit-base-patch32) |
+| Tokenizers | `tokenizer.json` of the CLIP and Florence-2 repos above | 2.2 + 2.3 MB | as the models | same commits |
+
+Every file serves `access-control-allow-origin` (checked with `curl -sI -H Origin:`; the LFS files redirect to the HF CDN with `*`).
+Everything over 50 MB goes through the consent prompt (`download()`). First-use totals: Select by Text ≈ 284 MB on
+WebGPU (q4f16 image part + int8 file for the text part) or 155 MB on WASM, plus SlimSAM; Text Mask 139 MB;
+Caption & OCR ≈ 365 MB on WebGPU / 275 MB on WASM; CLIP search 154 MB.
+
+Notes on the choices:
+- **int8 is wrong on WebGPU.** ORT 1.31's WebGPU EP runs the dynamically quantised (MatMulInteger) OWLv2 graph ≈16 s
+  slower than WASM and returns garbage boxes and scores. So int8 files run on WASM (`wasmOnly`), and WebGPU gets
+  q4f16 / fp16 files only where measured correct.
+- **OWLv2 q4f16 text tower is degraded** (paddle score 0.04 instead of 0.71 on `street`), while its image part is fine
+  (0.64, same boxes). So the text part is always the int8 file on WASM (≈60 ms per prompt). A new `Precision`
+  `'q4f16'` was added; `pickFile` takes fp16, else q4f16, on WebGPU with `shader-f16`.
+- **OWLv2 over OWL-ViT** as default: on `street` OWLv2 scores the paddle 0.71 vs 0.11 for OWL-ViT B/32. OWL-ViT stays as
+  the fast option (576 vs 3600 patches).
+- **Grounding DINO tiny** (`onnx-community/grounding-dino-tiny-ONNX`, Apache-2.0) was not used: 204 MB int8 / 360 MB fp16,
+  and its text and image streams are fused inside the encoder, so every prompt would re-run the whole model.
+- **CLIPSeg** stays int8 on WASM: 352² is small (≈1.9 s per image on one thread), one 139 MB download.
+- **Florence-2**: the fp16 vision encoder on WebGPU (0.3–0.6 s vs ≈10 s on one WASM thread) is worth its 184 MB; the
+  decoder runs on WASM at ≈21 ms per token (worker round trip), so even long OCR answers stay within seconds.
+  Florence-2 large (0.77 B) was not considered: ≈4× the size.
+- **CLIP** quantised (int8) on WASM: ≈0.21 s per thumbnail, ≈20 ms per query.
+
+Attribution:
+- OWL-ViT / OWLv2: M. Minderer, A. Gritsenko, N. Houlsby, *Scaling Open-Vocabulary Object Detection*, NeurIPS 2023;
+  M. Minderer et al., *Simple Open-Vocabulary Object Detection with Vision Transformers*, ECCV 2022. Google, Apache-2.0.
+- CLIPSeg: T. Lüddecke, A. Ecker, *Image Segmentation Using Text and Image Prompts*, CVPR 2022. Apache-2.0.
+- Florence-2: B. Xiao et al., *Florence-2: Advancing a Unified Representation for a Variety of Vision Tasks*, CVPR 2024. Microsoft, MIT.
+- CLIP: A. Radford et al., *Learning Transferable Visual Models From Natural Language Supervision*, ICML 2021. OpenAI, MIT.
+- ONNX exports: Xenova and onnx-community (Transformers.js).
+
+### Runtime additions (additive)
+- `src/core/ai/vl/onnx-split.ts`: `extractGraph(model, outputs, cutInputs?)` (sub-model extraction, with typed new
+  outputs / inputs, subgraph outer-scope references) and `castInputs()` (re-type a graph input behind a Cast).
+- `ModelInfo.task` gained `detection`, `vision-language`, `embedding`; `Precision` gained `q4f16`.
+- Several catalog entries can share one pinned URL (downloaded and cached once) with different `prepare` functions.
+- **Node info hook:** `src/core/nodeInfo.ts` (`setNodeInfo(id, {title, text, detail, suggestName})`, keyed by the new
+  `CpuContext.nodeId`, which the engine fills with the node's flat id). The Properties panel renders it
+  (`src/ui/NodeInfoBlock.tsx`) with Copy text / Use as project name. For a group, the infos of its inner nodes are shown.
+- `segment-sam.ts` exports `samEmbedding()`, `samDecodeBatch()` (SAM's point batch, padding label −10) and `samLowRes()`.
+
+### Timings (vision-language)
+Apple-silicon Mac, ORT 1.31.1, Chromium (`channel: 'chromium'`, real Metal WebGPU) vs WASM with 1 thread (the harness page is not
+cross-origin isolated; the app under COOP/COEP uses up to 4 threads), `street` (1600×1067), worker round trips included.
+
+| Step | WebGPU machine | WASM only (1 thread) |
+|---|---|---|
+| OWLv2 image part, 960² (q4f16 on WebGPU / int8) | ≈2.1 s (first ≈2.9 s incl. session) | ≈27 s |
+| OWL text part, a new prompt (int8, WASM in both) | ≈40 ms (first ≈0.3–0.5 s incl. load) | ≈40 ms |
+| SAM refine of one box (9 prompts, one batch) | ≈0.1 s (+ ≈0.8–1.3 s SAM encode, once per image) | ≈1.1 s (+ ≈5–7 s encode) |
+| Select by Text in the editor, typing a new prompt | mask updated ≈0.3–1 s after the last key | — |
+| CLIPSeg image part, 352² (int8, WASM in both) | ≈1.9 s | ≈1.8 s |
+| CLIPSeg new prompt (text + decoder) | ≈45 ms | ≈45 ms |
+| Florence-2 vision encoder, 768² (fp16 WebGPU / int8) | ≈0.33 s (first ≈1.1 s) | ≈9.8 s |
+| Florence-2 caption (12–13 tokens, encoder + decoder on WASM) | ≈2.3 s | ≈2.3–5.5 s |
+| Florence-2 object detection (24 tokens) / OCR with regions (93 tokens) | ≈2.1 s / ≈5 s | ≈2.1 s / ≈4.2 s |
+| Florence-2 decoder, per token | ≈21 ms | ≈21 ms |
+| CLIP image (224², one thumbnail) / text query | ≈0.22 s / ≈20 ms | ≈0.22 s / ≈20 ms |
+| Preset Browser, first ranking of 29 thumbnails | ≈7 s incl. CLIP load; later queries ≈0.1 s | same |
+
+The text encoder of Florence-2 (≈1.3 s for 577 + n tokens) and the decoder stay on WASM: int8 graphs are wrong or slow on
+the WebGPU EP. No Florence answer measured came near 30 s, so the node is not gated behind a “Run” switch.
+
+### Testing (vision-language)
+```bash
+node scripts/snap.mjs out.png 'node=ai.textSelect&img=street&wait=600&port=overlay&params={"prompt":"paddle"}'
+node scripts/snap.mjs out.png 'node=ai.textMask&img=landscape&wait=600&params={"prompt":"water"}'
+node scripts/snap.mjs out.png 'node=ai.caption&img=street&wait=900&port=overlay&params={"task":"Object%20detection"}'
+node scripts/snap.mjs out.png 'preset=ai.textBlurBackground&img=street&wait=600&p.prompt="woman"'
+```
+- The consent prompt has no UI in the harness: models over 50 MB wait forever. Set the pref first, e.g. with a
+  Playwright init script `localStorage.setItem('darkroom.prefs', JSON.stringify({version: 1, prefs: {aiConfirmMB: 0}}))`,
+  or approve once in the app (approvals persist per URL).
+- Unit tests: `src/core/ai/vl/tokenizer.test.ts`, `boxes.test.ts` (OWL head, detections, padding filter, NMS, keep modes,
+  prompt parsing, SAM proposal choice), `florence-post.test.ts` (answer parsing).
+
+### Known gaps (vision-language)
+- OWL detects *things*, not *stuff*: “trees”, “water”, “sky” come out as one huge low-score box or nothing. Use Text Mask for those.
+- The q4f16 OWLv2 image part scores slightly lower than int8 (paddle 0.64 vs 0.71); hence the 0.1 default threshold.
+- SAM refinement inherits SAM's 256² mask: thin parts (paddle shaft, fingers) may be lost, and a box that holds two objects can select only one.
+- CLIPSeg is coarse (352² for the whole frame, ≈16 px patches). The matting snaps edges, but semantic errors stay
+  (e.g. “skin” on `portrait` finds the shoulder and only part of the face).
+- Florence-2 plain *OCR* returns lines without separators (as the reference implementation); *OCR with regions* gives one line per region.
+  Greedy decoding instead of beam search; long answers (dense OCR) take ≈20 ms per token on top.
+- Florence-2's detection labels are COCO-like (“human face”, “person”); boxes can cover the whole frame (“boat”).
+- CLIP ranking of looks is approximate: thumbnails are small and share the photo. Mean-centring helps but semantic
+  queries (“newspaper print”) match better than vague moods.
+- The WebGPU paths download two copies of OWLv2 (q4f16 image part + int8 text part).
+
 ## Runtime (`src/core/ai/`)
 
 | File | Role |
@@ -866,6 +1264,8 @@ in Chromium (Metal WebGPU).
 | `image.ts` | Resampling, NCHW packing, normalisation, the inference memo |
 | `models-img.ts` | Image-to-image models (upscale, inpaint, colorize, style, low light, line art), registered with `registerModel()` |
 | `models-relight.ts` | MoGe-2 ViT-S (normals + geometry) for `ai.normals` |
+| `models-vl.ts` | Vision-language models (OWLv2 / OWL-ViT, CLIPSeg, Florence-2, CLIP), several entries per shared download |
+| `vl/` | Tokenizers, ONNX graph split, OWL / CLIPSeg / Florence-2 / CLIP pipelines, box post-processing, Preset Browser ranking |
 | `onnx-proto.ts` | Minimal ONNX protobuf editing for `ModelInfo.prepare`: `freeImageDims()`, `buildZeroDce()` |
 | `AiModels.tsx` | The *AI Models* section of the Plugin Manager, and the download-progress toast |
 

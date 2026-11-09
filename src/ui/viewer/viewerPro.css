@@ -652,3 +652,13 @@
     border-color: var(--m-line, var(--line));
   }
 }
+
+/* Preset Browser: CLIP “More like this” link (shown on hover) */
+.vx-pb-like {
+  visibility: hidden;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.vx-pb-tile:hover .vx-pb-like {
+  visibility: visible;
+}

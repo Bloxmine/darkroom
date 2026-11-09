@@ -20,6 +20,7 @@ import {
   type VideoCodec,
 } from 'mediabunny';
 import { flattenGraph } from '../core/graph';
+import type { Graph, GraphNode } from '../core/types';
 import { sourceTime } from '../core/video';
 import { videoHasAudio } from '../core/videoAssets';
 import { outputNodeId, useDoc } from './doc';
@@ -48,6 +49,12 @@ export interface VideoExportOptions {
   quality: QualityName;
   /** Copy the encoded audio of the (first) video source (speed 1, no loop wrap). */
   audio: boolean;
+  /**
+   * Smooth slow motion ×2 / ×4 (AI frame interpolation): every Video node is rendered through the
+   * Smooth Slow Motion source (ai.videoSlowMo, RIFE) at speed ÷ factor, and the output is factor× longer
+   * (`duration` stays the source timeline length). 1 / undefined = off. No audio.
+   */
+  slowMo?: number;
 }
 
 export interface VideoExportResult {
@@ -126,11 +133,22 @@ export async function measureVideoOutput(): Promise<{ width: number; height: num
   return { width: r.fullWidth, height: r.fullHeight };
 }
 
+/** The graph with every core.video node (also inside groups) swapped for the RIFE slow-motion source at speed ÷ factor. */
+export function slowMoGraph(g: Graph, factor: number): Graph {
+  const swap = (n: GraphNode): GraphNode => {
+    if (n.type === VIDEO && !n.bypass) return { ...n, type: 'ai.videoSlowMo', params: { ...n.params, speed: (Number(n.params.speed ?? 1) || 1) / factor } };
+    if (n.group) return { ...n, group: { ...n.group, graph: slowMoGraph(n.group.graph, factor) } };
+    return n;
+  };
+  return { ...g, nodes: g.nodes.map(swap) };
+}
+
 export async function exportVideo(o: VideoExportOptions, onProgress: (frame: number, frames: number) => void, signal: AbortSignal): Promise<VideoExportResult> {
   if (!engine) throw new Error('WebGL2 is not available.');
   const t0 = performance.now();
   const doc = useDoc.getState();
-  const graph = doc.project.graph;
+  const slow = Math.max(1, Math.round(o.slowMo ?? 1));
+  const graph = slow > 1 ? slowMoGraph(doc.project.graph, slow) : doc.project.graph;
   const nodeId = outputNodeId(doc.project);
   const probe = await measureVideoOutput();
   if (!probe.width) throw new Error('Nothing to export — connect something to the Output node.');
@@ -138,7 +156,7 @@ export async function exportVideo(o: VideoExportOptions, onProgress: (frame: num
   const why = await checkVideoSupport(o, width, height);
   if (why) throw new Error(why);
 
-  const frames = Math.max(1, Math.round(o.duration * o.fps));
+  const frames = Math.max(1, Math.round(o.duration * slow * o.fps));
   const format = o.container === 'mp4' ? new Mp4OutputFormat({ fastStart: 'in-memory' }) : new WebMOutputFormat();
   const target = new BufferTarget();
   const output = new Output({ format, target });
@@ -173,7 +191,7 @@ export async function exportVideo(o: VideoExportOptions, onProgress: (frame: num
 
     // --- optional audio passthrough (encoded packets copied, no re-encode)
     let audio: { src: EncodedAudioPacketSource; it: AsyncGenerator<EncodedPacket>; next: EncodedPacket | null; meta: EncodedAudioChunkMetadata; offset: number; end: number; first: boolean } | null = null;
-    const as = o.audio ? audioSource() : null;
+    const as = o.audio && slow === 1 ? audioSource() : null;
     if (as && canPassAudio()) {
       audioInput = new Input({ source: new BlobSource(as.asset.blob!), formats: ALL_FORMATS });
       const at = await audioInput.getPrimaryAudioTrack();
@@ -226,8 +244,8 @@ export async function exportVideo(o: VideoExportOptions, onProgress: (frame: num
       engine.liveTick++; // webcams: grab a fresh frame
       await prepareVideoFrames(graph, t);
       let res = engine.render(graph, { nodeId, scale: o.scale });
-      if (engine.cpuBusy) {
-        // async sources (first decode, webcam warm-up): wait and render again
+      // async sources (first decode, webcam warm-up) and async nodes downstream of them (AI): wait and render again
+      for (let k = 0; k < 8 && engine.cpuBusy; k++) {
         await engine.whenCpuIdle();
         res = engine.render(graph, { nodeId, scale: o.scale });
       }

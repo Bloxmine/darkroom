@@ -23,6 +23,7 @@ import { graphAt, localIdForFlat, updateGraphAt } from '../../store/graphPath';
 import { useSettings } from '../../store/settings';
 import { status } from '../../store/ui';
 import { useViewer } from '../../store/viewer';
+import { useClipRank } from '../../core/ai/vl/presetRank';
 import { categoryIcon, Icon } from '../Icon';
 import './viewerPro.css';
 
@@ -270,8 +271,12 @@ function PresetBrowserWindow() {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('All');
   const [ai, setAi] = useState(false);
+  // CLIP look search (“Describe a look…”, Enter) and “More like this”: off until used (downloads CLIP once)
+  const [lookDraft, setLookDraft] = useState('');
+  const [look, setLook] = useState('');
+  const [like, setLike] = useState<string | null>(null);
   const regV = useSyncExternalStore(subscribeRegistry, registryVersion);
-  useSyncExternalStore(subscribeThumbs, () => version);
+  const thumbV = useSyncExternalStore(subscribeThumbs, () => version);
   const all = useMemo(() => listPresets().sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name)), [regV]);
   const cats = useMemo(() => ['All', ...new Set(all.filter((p) => ai || !isSlowPreset(p)).map((p) => p.category))], [all, ai]);
   const shown = useMemo(() => {
@@ -284,6 +289,8 @@ function PresetBrowserWindow() {
     );
   }, [all, q, cat, ai]);
   useRenderQueue(shown, size, true);
+  const rank = useClipRank(shown.map((p) => p.id), (id) => thumbs.get(id), thumbV, like ? '' : look, like);
+  const ordered = rank ? [...shown].sort((a, b) => (rank.scores.get(b.id) ?? -2) - (rank.scores.get(a.id) ?? -2)) : shown;
   const plan = applyPlan();
   const g = graphAt(useDoc.getState().project.graph, plan.path);
   const anchor = plan.feed && g?.nodes.find((n) => n.id === plan.feed!.node);
@@ -308,17 +315,37 @@ function PresetBrowserWindow() {
             </option>
           ))}
         </select>
+        <input
+          className="field text vx-pb-search"
+          placeholder="Describe a look… (CLIP, Enter)"
+          title="Rank presets by how well their preview matches a description, e.g. “faded 90s camcorder”, “moody cyan night”, “newspaper print”. Runs CLIP locally (154 MB download on first use)."
+          value={lookDraft}
+          onChange={(e) => {
+            setLookDraft(e.target.value);
+            if (!e.target.value.trim()) (setLook(''), setLike(null));
+          }}
+          onKeyDown={(e) => e.key === 'Enter' && (setLook(lookDraft.trim()), setLike(null))}
+          spellCheck={false}
+          data-clip-search
+        />
+        {(look || like) && (
+          <button className="btn" title="Back to the normal order" onClick={() => (setLook(''), setLike(null), setLookDraft(''))}>
+            ✕ {like ? `Like “${all.find((p) => p.id === like)?.name ?? like}”` : 'Look'}
+          </button>
+        )}
         <label className="vx-check" title="AI and generation presets run neural networks (and may download models) for every preview">
           <input type="checkbox" checked={ai} onChange={(e) => setAi(e.target.checked)} /> Include AI presets (slow)
         </label>
         <span className="flex1" />
         <span className="muted small">
-          {done < shown.length ? `Rendering ${done}/${shown.length}…` : `${shown.length} presets`} · applies after <b>{anchorName || '—'}</b>
+          {done < shown.length ? `Rendering ${done}/${shown.length}…` : `${shown.length} presets`}
+          {rank && (rank.error ? ` · CLIP: ${rank.error}` : rank.busy ? ` · ranking ${rank.embedded}/${rank.total}…` : ' · ranked by CLIP')} · applies after <b>{anchorName || '—'}</b>
         </span>
       </div>
       <div className="vx-pb-grid" style={{ '--pb-size': `${size}px` } as React.CSSProperties}>
-        {shown.map((p) => {
+        {ordered.map((p) => {
           const th = thumbs.get(p.id);
+          const score = rank?.scores.get(p.id);
           return (
             <button key={p.id} className="vx-pb-tile" title={p.description ? `${p.name}\n${p.description}` : p.name} onClick={() => applyPreset(p.id)} data-preset={p.id}>
               <span className="vx-pb-img">
@@ -327,7 +354,21 @@ function PresetBrowserWindow() {
               <span className="vx-pb-name">
                 <Icon name={categoryIcon(p.category)} /> {p.name}
               </span>
-              <span className="vx-pb-cat muted">{p.category}</span>
+              <span className="vx-pb-cat muted">
+                {p.category}
+                {score !== undefined && ` · ${(score * 100).toFixed(0)}`}
+                {th?.url && (
+                  <span
+                    role="button"
+                    className="vx-pb-like"
+                    title="More like this: rank presets by visual similarity to this preview (CLIP)"
+                    onClick={(e) => (e.stopPropagation(), setLike(p.id))}
+                    data-like={p.id}
+                  >
+                    {' '}≈ more like this
+                  </span>
+                )}
+              </span>
             </button>
           );
         })}

@@ -36,14 +36,16 @@ export function ExportVideoDialog() {
     bitrateMbps: 0,
     quality: 'high',
     audio: canPassAudio(),
+    slowMo: 1,
   }));
   const [support, setSupport] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ frame: number; frames: number; t0: number; now: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abort = useRef<AbortController | null>(null);
   const size = exportSize(full, o.scale);
-  const frames = Math.max(1, Math.round(o.duration * o.fps));
-  const audioOk = canPassAudio();
+  const slow = o.slowMo ?? 1;
+  const frames = Math.max(1, Math.round(o.duration * slow * o.fps));
+  const audioOk = canPassAudio() && slow === 1;
   const set = (p: Partial<VideoExportOptions>) => setO((x) => ({ ...x, ...p }));
 
   useEffect(() => {
@@ -178,8 +180,21 @@ export function ExportVideoDialog() {
           <span>Duration</span>
           <span className="tb-label">
             <NumField value={o.duration} onChange={(v) => set({ duration: Math.max(0.1, Math.min(3600, v)) })} step={0.1} width={48} /> s
-            <span className="muted">({frames} frames{!tl.hasVideo ? ', animated noise' : ''})</span>
+            <span className="muted">({frames} frames{!tl.hasVideo ? ', animated noise' : ''}{slow > 1 ? `, ${(o.duration * slow).toFixed(1)} s out` : ''})</span>
           </span>
+          <label htmlFor="vx-slowmo">Slow motion</label>
+          <select
+            id="vx-slowmo"
+            className="field select"
+            value={slow}
+            disabled={!tl.hasVideo}
+            title="Renders in-between frames of the source video with RIFE (AI frame interpolation, ~23 MB model): the export is 2× / 4× longer and stays smooth. Slow: one AI inference per new frame."
+            onChange={(e) => set({ slowMo: +e.target.value })}
+          >
+            <option value={1}>Off</option>
+            <option value={2}>Smooth slow motion ×2 (AI frame interpolation)</option>
+            <option value={4}>Smooth slow motion ×4 (AI frame interpolation)</option>
+          </select>
         </div>
       </fieldset>
       {support === null && <p className="muted small">Checking encoder support…</p>}

@@ -19,6 +19,7 @@ import { useContextMenu, type MenuItem } from './Menu';
 import { useRegistry } from './useRegistry';
 import { CustomTypeRow, NodeErrorNote } from './CustomTypeInfo';
 import { RawMetaBlock } from './RawInfo';
+import { NodeInfoBlock } from './NodeInfoBlock';
 import { RAW } from '../core/raw/formats';
 import { GenerateBar, showGenerateBar } from '../core/sd/GenerateBar';
 import { EyedropperButton } from './viewer/Eyedropper';
@@ -455,6 +456,7 @@ export function Properties() {
           ))}
           {node.type === IMAGE && !node.params.asset && <div className="pnote">Tip: drop an image file onto the Node Graph to import it.</div>}
           {node.type === RAW && <RawMetaBlock assetId={String(node.params.asset ?? '')} />}
+          <NodeInfoBlock flatId={fid} />
         </Section>
 
         {isGroup && (

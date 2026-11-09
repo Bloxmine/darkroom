@@ -129,6 +129,29 @@ on other machines. Larger ones stay a reference, and the import status warns tha
 the saved file. The timeline settings (fps, length, loop, animate, realtime) are saved in
 `project.timeline`.
 
+## AI motion: optical flow, datamosh, slow motion
+
+The AI motion nodes are documented in [AI.md](AI.md#motion-interpolation-style-from-image-and-matting). The parts
+that touch the timeline:
+
+- **Previous frame.** Optical Flow with its frame A unconnected uses the frame it saw one frame earlier (its own
+  history). This works during playback and export, for any source (video, webcam, a graded video, inside presets).
+  For exact pairs while scrubbing, wire **Video Frame (offset)** (`core.videoFrameOffset`, offset −1) into frame A. It
+  has its own decoder, so the main Video node's decoder never seeks backwards.
+- **Datamosh** (`effects.datamosh`) accumulates over frames. Frame 0 (and every still) passes through, and so does a
+  jump in time: it starts a new I-frame.
+- **Every frame playback waits for AI.** With *Every frame* selected, playback waits for pending async node work (AI
+  inference) before it advances, so a datamosh or slow-motion chain plays every frame completely (≈3–4 fps for the
+  datamosh preset on WebGPU). *Realtime* drops frames instead; the flow history tolerates gaps of up to 3 frames.
+- **Smooth Slow Motion** (`ai.videoSlowMo`) is a Video source whose in-between times (speed below 1) are RIFE frames.
+  Speed 0.5 = ×2, 0.25 = ×4. Like `core.videoFrameOffset`, it counts as a video for the timeline: it sets the length,
+  and the project is in motion.
+- **Export Video › Slow motion** (*Off*, *Smooth slow motion ×2*, *×4*): every Video node is rendered through Smooth
+  Slow Motion at speed ÷ factor, and the export is factor× longer than the timeline (the dialog shows the output
+  length). Audio is not included.
+- The export loop now re-renders up to 8 times while async steps are pending, so chains of async nodes (slow-motion
+  source → optical flow → datamosh) are complete in every exported frame.
+
 ## Known limits
 
 - Preview playback has no audio. Audio export is passthrough only: it needs speed 1, has no loop

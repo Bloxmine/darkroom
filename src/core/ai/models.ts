@@ -4,7 +4,8 @@
  * Licences/attribution: docs/AI.md.
  */
 
-export type Precision = 'fp32' | 'fp16' | 'q8';
+/** q4f16: 4-bit weights (MatMulNBits) with fp16 activations, used on WebGPU when there is no fp16 file. */
+export type Precision = 'fp32' | 'fp16' | 'q8' | 'q4f16';
 
 export interface ModelFile {
   precision: Precision;
@@ -15,7 +16,7 @@ export interface ModelFile {
 export interface ModelInfo {
   id: string;
   name: string;
-  task: 'depth' | 'matting' | 'saliency' | 'segmentation' | 'super-resolution' | 'inpainting' | 'colorization' | 'style-transfer' | 'low-light' | 'line-art' | 'denoising' | 'face' | 'pose' | 'face-restoration' | 'normals';
+  task: 'depth' | 'matting' | 'saliency' | 'segmentation' | 'super-resolution' | 'inpainting' | 'colorization' | 'style-transfer' | 'low-light' | 'line-art' | 'denoising' | 'face' | 'pose' | 'face-restoration' | 'normals' | 'detection' | 'vision-language' | 'embedding';
   licence: string;
   /** Model card. */
   page: string;
@@ -77,10 +78,10 @@ export const MODELS: Record<string, ModelInfo> = {
 /** Pick the file to download for a backend: fp16 on WebGPU with shader-f16, else the smallest int8/fp32. */
 export function pickFile(model: ModelInfo, ep: 'webgpu' | 'wasm', shaderF16: boolean): ModelFile {
   if (ep === 'webgpu' && shaderF16) {
-    const f = model.files.find((x) => x.precision === 'fp16');
+    const f = model.files.find((x) => x.precision === 'fp16') ?? model.files.find((x) => x.precision === 'q4f16');
     if (f) return f;
   }
-  return model.files.find((x) => x.precision === 'q8') ?? model.files.find((x) => x.precision === 'fp32') ?? model.files[0];
+  return model.files.find((x) => x.precision === 'q8') ?? model.files.find((x) => x.precision === 'fp32') ?? model.files.find((x) => x.precision !== 'q4f16') ?? model.files[0];
 }
 
 /** Add models to the catalog from another module (e.g. models-seg.ts). Additive; an existing id is replaced. */
