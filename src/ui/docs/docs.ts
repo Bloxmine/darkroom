@@ -25,6 +25,7 @@ const meta: [path: string, title: string, icon: string][] = [
   ['docs/CUSTOM_NODES.md', 'Custom Nodes', 'script_edit'],
   ['docs/PLUGINS.md', 'Plugins', 'plugin'],
   ['public/plugins/README.md', 'Plugin Template', 'plugin_add'],
+  ['docs/FILTERS.md', 'Pro Filters & LUTs', 'color_swatch'],
   ['docs/AI.md', 'AI Nodes', 'brain'],
   ['docs/CONTROLNET.md', 'ControlNet', 'artwork'],
   ['docs/VIDEO.md', 'Video', 'film'],

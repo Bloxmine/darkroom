@@ -147,7 +147,7 @@ function NodeViewImpl({ data, selected }: NodeProps<DrNode>) {
           }}
           onDoubleClick={(e) => e.stopPropagation()}
         >
-          <Icon name={unknown ? 'plugin_disabled' : node.bypass ? 'link_break' : nodeIcon(node.type)} />
+          <Icon name={unknown ? 'plugin_disabled' : node.bypass ? 'link_break' : nodeIcon(node.type, node)} />
         </span>
         {renaming ? <RenameField node={node} onDone={doneRename} /> : <span className="dn-name">{nodeName(node)}</span>}
         {pending && <Icon name="hourglass" title="Loading…" />}

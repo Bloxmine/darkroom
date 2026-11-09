@@ -46,7 +46,7 @@ export function addNodeMenus(at: () => { x: number; y: number } = addAt, opts: A
             pc
               .get(c)!
               .sort((a, b) => a.name.localeCompare(b.name))
-              .map((p) => ({ label: p.name, icon: 'bricks', title: p.description, run: () => void addNode({ kind: 'preset', id: p.id }, at(), undefined, opts) })),
+              .map((p) => ({ label: p.name, icon: categoryIcon(p.category), title: p.description, run: () => void addNode({ kind: 'preset', id: p.id }, at(), undefined, opts) })),
         })),
     });
   }
@@ -64,6 +64,7 @@ export const MENUS: { title: string; items: () => MenuItem[] }[] = [
       { sep: true },
       { cmd: 'file.import' },
       { cmd: 'file.export' },
+      { cmd: 'file.exportLut' },
       { cmd: 'file.exportVideo' },
       { cmd: 'file.batch' },
     ],

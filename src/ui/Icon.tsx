@@ -1,5 +1,5 @@
 import { GROUP, GROUP_INPUT, GROUP_OUTPUT, IMAGE, OUTPUT } from '../core/graph';
-import { getNodeDef } from '../core/registry';
+import { getNodeDef, listPresets } from '../core/registry';
 
 /** A FatCow Farm-Fresh icon (CC BY 3.0) from public/icons/fatcow. */
 export function Icon({ name, size = 16, title, className }: { name: string; size?: 16 | 32; title?: string; className?: string }) {
@@ -16,38 +16,81 @@ export function Icon({ name, size = 16, title, className }: { name: string; size
   );
 }
 
-/** Keyword → icon, matched against lower-cased category names (first hit wins). */
-const CATEGORY_ICONS: [RegExp, string][] = [
+/**
+ * One distinct icon per category (exact, case-insensitive). Every built-in node and preset category
+ * is listed so no two categories share an icon.
+ */
+const CATEGORY_ICON: Record<string, string> = {
+  // sources & structure
+  input: 'folder_image',
+  utility: 'cog',
+  custom: 'script_code',
+  // colour
+  color: 'color_wheel',
+  'color management': 'color_management',
+  // filters & geometry
+  filter: 'filter',
+  distort: 'draw_wave',
+  transform: 'transform_rotate',
+  lens: 'camera_lens',
+  optical: 'weather_sun',
+  // compositing & masks
+  composite: 'layers',
+  mix: 'arrow_join',
+  mask: 'layer_mask',
+  local: 'draw_airbrush',
+  // Blender-style math & procedural
+  math: 'math_functions',
+  vector: 'vector',
+  converter: 'arrow_switch',
+  texture: 'draw_spiral',
+  procedural: 'rainbow',
+  // looks
+  stylize: 'palette',
+  artistic: 'paintbrush',
+  analog: 'film_photo',
+  camera: 'camera',
+  photo: 'photos',
+  process: 'flask',
+  print: 'printer',
+  retro: 'joystick',
+  fun: 'emotion_happy',
+  video: 'vhs',
+  motion: 'film_go',
+  pro: 'medal_gold_blue',
+  // AI & generation
+  ai: 'brain',
+  controlnet: 'node_design',
+  generation: 'magic_wand_2',
+  // presets
+  'my presets': 'star',
+  presets: 'award_star_gold_blue',
+};
+
+/** Fallback keywords for categories not listed above (e.g. from plugins). */
+const CATEGORY_KEYWORDS: [RegExp, string][] = [
   [/^input|source|load/, 'folder_image'],
-  [/generat|pattern|procedur/, 'rainbow'],
-  [/colou?r|grade|tone/, 'color_wheel'],
-  [/curve/, 'chart_curve'],
+  [/generat|diffusion|\bsd\b/, 'magic_wand_2'],
+  [/colou?r|grade|tone|lut/, 'color_wheel'],
   [/blur|filter|sharp|convol/, 'filter'],
-  [/distort|warp|transform|geometr/, 'transform_rotate'],
-  [/composit|blend|merge|layer|mix/, 'layers'],
+  [/composit|blend|merge|layer/, 'layers'],
   [/mask|matte|key/, 'layer_mask'],
-  [/math|channel|expr/, 'math_functions'],
-  [/util|misc|core/, 'cog'],
-  [/text|type|font/, 'font'],
-  [/light|glow|bloom|lens|optic/, 'lightbulb'],
-  [/noise|grain/, 'draw_points'],
-  [/stylize|stylise|artist|paint/, 'palette'],
-  [/analog|analogue/, 'film_photo'],
-  [/film/, 'film'],
-  [/video|vhs|tape|broadcast/, 'vhs'],
-  [/tv|crt|television|screen|display/, 'television'],
-  [/camera|photo/, 'camera'],
-  [/print|press|halftone/, 'printer'],
-  [/retro|game|pixel|8.?bit/, 'joystick'],
-  [/fun|toy/, 'emotion_happy'],
-  [/digital|glitch/, 'computer'],
-  [/preset/, 'star'],
+  [/\bai\b|neural|model/, 'brain'],
+  [/video|vhs|tape/, 'vhs'],
+  [/print|halftone/, 'printer'],
 ];
 
+/** Spare icons for unknown categories: picked by a stable hash so each keeps the same icon. */
+const SPARE_ICONS = ['ruby', 'diamond', 'rocket', 'lightning', 'crown_gold', 'draw_star', 'sitemap', 'hammer', 'cd', 'speedometer', 'draw_ink', 'pencil_ruler'];
+
 export function categoryIcon(category: string): string {
-  const c = category.toLowerCase();
-  for (const [re, icon] of CATEGORY_ICONS) if (re.test(c)) return icon;
-  return 'brick';
+  const c = category.trim().toLowerCase();
+  if (CATEGORY_ICON[c]) return CATEGORY_ICON[c];
+  for (const [re, icon] of CATEGORY_KEYWORDS) if (re.test(c)) return icon;
+  if (!c) return 'brick';
+  let h = 0;
+  for (let i = 0; i < c.length; i++) h = (h * 31 + c.charCodeAt(i)) >>> 0;
+  return SPARE_ICONS[h % SPARE_ICONS.length];
 }
 
 const TYPE_ICONS: Record<string, string> = {
@@ -59,7 +102,13 @@ const TYPE_ICONS: Record<string, string> = {
   [GROUP_OUTPUT]: 'door_out',
 };
 
-export function nodeIcon(type: string): string {
+/** Icon for a node type; pass the node itself so preset groups get their category's icon. */
+export function nodeIcon(type: string, node?: { group?: { category?: string; name?: string } }): string {
+  if (type === GROUP && node?.group) {
+    // older projects: find the preset this group was made from by name
+    const cat = node.group.category ?? listPresets().find((p) => p.name === node.group!.name || p.group.name === node.group!.name)?.category;
+    if (cat) return categoryIcon(cat);
+  }
   return TYPE_ICONS[type] ?? categoryIcon(getNodeDef(type)?.category ?? '');
 }
 

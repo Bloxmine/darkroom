@@ -42,7 +42,7 @@ export function useAddEntries(): { nodes: Entry[]; presets: Entry[]; all: Map<st
       category: p.category,
       description: p.description,
       tags: p.tags,
-      icon: isUserPreset(p.id) ? 'star' : 'bricks',
+      icon: isUserPreset(p.id) ? 'star' : categoryIcon(p.category),
       user: isUserPreset(p.id),
     }));
     return { nodes, presets, all: new Map([...nodes, ...presets].map((e) => [e.key, e])) };

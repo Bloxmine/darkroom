@@ -371,7 +371,7 @@ export function Properties() {
     >
       <div className="props-scroll">
         <div className="props-head">
-          <Icon name={nodeIcon(node.type)} size={32} />
+          <Icon name={nodeIcon(node.type, node)} size={32} />
           <div className="props-head-text">
             <LabelField node={node} />
             <div className="muted props-type">

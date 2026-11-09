@@ -1,7 +1,7 @@
 import { GROUP } from '../core/graph';
 import * as A from '../store/actions';
 import { currentGraph, redo, undo, useDoc } from '../store/doc';
-import { importImageDialog, openProjectFile, saveProjectFile, saveProjectFileAs, newProject } from '../store/io';
+import { exportLut, importImageDialog, openProjectFile, saveProjectFile, saveProjectFileAs, newProject } from '../store/io';
 import { setNodeThumbnails, setTheme, THEMES, useSettings } from '../store/settings';
 import { openDialog, status, useUi } from '../store/ui';
 import { zoomViewer } from './viewerApi';
@@ -54,6 +54,7 @@ def({ id: 'file.save', label: 'Save Project', icon: 'diskette', keys: 'Ctrl+S', 
 def({ id: 'file.saveAs', label: 'Save Project As…', icon: 'diskette', keys: 'Ctrl+Shift+S', run: saveProjectFileAs });
 def({ id: 'file.import', label: 'Import Image…', icon: 'image_add', keys: 'Ctrl+I', run: () => void importImageDialog() });
 def({ id: 'file.export', label: 'Export Image…', icon: 'picture_save', keys: 'Ctrl+E', run: () => openDialog('export') });
+def({ id: 'file.exportLut', label: 'Export LUT (.cube)…', icon: 'color_swatch', run: () => void exportLut(33) });
 def({ id: 'file.exportVideo', label: 'Export Video…', icon: 'film_save', keys: 'Ctrl+Shift+E', run: () => openDialog('exportVideo'), enabled: () => !T.useTimeline.getState().exporting });
 def({ id: 'file.batch', label: 'Batch Process…', icon: 'images', keys: 'Ctrl+Shift+B', run: () => openDialog('batch') });
 

@@ -102,10 +102,10 @@ export async function pickImages(): Promise<File[]> {
 }
 
 /** Save dialog + write. Resolves false if cancelled. */
-export async function saveBlob(blob: Blob, suggestedName: string, ext: string): Promise<boolean> {
+export async function saveBlob(blob: Blob, suggestedName: string, ext: string, label = ext.toUpperCase() + ' Image'): Promise<boolean> {
   const path = await native!.saveFile(new Uint8Array(await blob.arrayBuffer()), {
     suggestedName,
-    filters: [{ name: ext.toUpperCase() + ' Image', extensions: [ext] }],
+    filters: [{ name: label, extensions: [ext] }],
   });
   return !!path;
 }

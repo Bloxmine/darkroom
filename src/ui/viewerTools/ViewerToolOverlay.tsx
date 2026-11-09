@@ -318,7 +318,7 @@ function ToolLayer({ tool, host, spaceDown }: { tool: ActiveTool; host: React.Re
       <div className="vt-hud" onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
         <div className="vt-title">
           <b>{tool.name}</b>
-          <span className="vt-kind">{def.kind === 'brush' ? 'Brush' : def.kind === 'box' ? 'Box' : tool.handles ? (handles.length > 1 ? `${handles.length} lights` : 'Light') : def.single ? 'Position' : 'Points'}</span>
+          <span className="vt-kind">{def.kind === 'brush' ? 'Brush' : def.kind === 'box' ? 'Box' : tool.handles ? (handles.every((h) => /^\d+$/.test(String(h.label))) ? (handles.length > 1 ? `${handles.length} lights` : 'Light') : `${handles.length} handle${handles.length === 1 ? '' : 's'}`) : def.single ? 'Position' : 'Points'}</span>
           {pending && <span className="vt-busy">working…</span>}
         </div>
         {def.kind === 'points' && !def.single && (
@@ -338,9 +338,9 @@ function ToolLayer({ tool, host, spaceDown }: { tool: ActiveTool; host: React.Re
           <div className="vt-row">
             <div className="vt-seg">
               {handles.map((h) => (
-                <button key={h.key} className={'btn' + (h.i === activeIdx ? ' vt-on' : '')} onClick={() => useToolUi.setState({ activeHandle: h.i })} title="Clicks on the image move this light">
+                <button key={h.key} className={'btn' + (h.i === activeIdx ? ' vt-on' : '')} onClick={() => useToolUi.setState({ activeHandle: h.i })} title="Clicks on the image move this handle">
                   {h.color && <span className="vt-swatch" style={{ background: `rgb(${h.color.slice(0, 3).map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255)).join(',')})` }} />}
-                  Light {h.label}
+                  {/^\d+$/.test(String(h.label)) ? `Light ${h.label}` : h.label}
                 </button>
               ))}
             </div>

@@ -184,6 +184,11 @@ export interface NodeDef {
    */
   heavy?: boolean;
   /**
+   * Per-pixel colour transform only (output pixel depends solely on the same input pixel's colour; no
+   * spatial sampling, no size change). Such nodes can be baked into a 3D LUT (File › Export LUT).
+   */
+  colorOnly?: boolean;
+  /**
    * Output size at FULL resolution. Default: size of first connected image input,
    * else the project size. The engine multiplies by render scale.
    */
@@ -305,6 +310,8 @@ export interface GroupData {
   name: string;
   graph: Graph;
   exposed: ExposedParam[];
+  /** Preset category this group was created from (drives its icon); absent for hand-made groups. */
+  category?: string;
 }
 
 export interface ExposedParam {

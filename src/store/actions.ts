@@ -37,6 +37,7 @@ export function buildNode(spec: AddSpec, pos: { x: number; y: number }): GraphNo
     if (!p) return null;
     const n = createGroupNode(p.group, pos);
     n.label = p.name;
+    n.group!.category = p.category; // gives the node its category icon
     // remember the preset's own values as the exposed params' defaults (Reset / modified marker)
     n.group!.exposed = n.group!.exposed.map((e) => (e.def && 'default' in e.def ? e : { ...e, def: { ...e.def, default: clone(n.params[e.key]) } }));
     return n;

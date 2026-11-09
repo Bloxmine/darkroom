@@ -17,6 +17,8 @@ import { embedRawAssets, scheduleRawGc } from '../core/raw/rawAsset';
 import { embedVideoAssets, isVideoFile } from '../core/videoAssets';
 import { importVideoFiles } from './videoImport';
 import { renderReady } from '../core/batch/ready';
+import { buildLutGraph, writeCube } from '../nodes/pro/lut-export';
+import { flatId } from './graphPath';
 
 const serial = (a: Asset) => ({ id: a.id, name: a.name, mime: a.mime, dataUrl: a.dataUrl });
 
@@ -184,6 +186,45 @@ export async function exportImage(type: ExportType, quality: number) {
   if (!native) download(blob, name);
   else if (!(await desktop.saveBlob(blob, name, EXT[type]))) return; // cancelled
   status(`Exported ${(blob.size / 1024).toFixed(0)} KB in ${Math.round(performance.now() - t0)} ms.`);
+}
+
+/**
+ * File › Export LUT (.cube): bake the colour pipeline from the source image to the selected node (or the
+ * output) into an N³ 3D LUT. The source image(s) upstream are replaced by an identity lattice (see
+ * src/nodes/pro/lut-export.ts) and the graph is rendered at full resolution; spatial nodes (blur, grain,
+ * distortion, local adjustments) can't be represented and are listed in a warning.
+ * Resolves to the .cube text (null if nothing was exported).
+ */
+export async function exportLut(size = 33, opts: { save?: boolean } = {}): Promise<string | null> {
+  const s = useDoc.getState();
+  const out = outputNodeId(s.project);
+  let target = s.selection.length === 1 ? flatId(s.path, s.selection[0]) : out;
+  if (!target) return status('Export LUT: select a node or add an Output node.', 'error'), null;
+  let lg = buildLutGraph(s.project.graph, target, size);
+  if (!lg.graph.nodes.some((n) => n.id === target) && out) lg = buildLutGraph(s.project.graph, (target = out), size); // e.g. a group node selected
+  if (!lg.sources) return status('Export LUT: no image source feeds the selected node.', 'error'), null;
+  let text: string;
+  try {
+    const res = await renderReady(engine, lg.graph, { nodeId: target, scale: 1, cacheTag: 'lut' });
+    if (!res.tex) throw new Error(engine.errors.get(target) ?? 'nothing rendered');
+    if (res.tex.width !== size * size || res.tex.height !== size) throw new Error('the graph changes the image size (crop / border / resize nodes cannot be baked into a LUT)');
+    text = writeCube(engine.gl.readFloat(res.tex), size, `${s.project.name || 'Darkroom'} LUT`);
+  } catch (e) {
+    status(`Export LUT failed: ${(e as Error).message}`, 'error');
+    return null;
+  } finally {
+    engine.dropCache('lut');
+    requestRender();
+  }
+  if (opts.save !== false) {
+    const name = `${exportBaseName()}.cube`;
+    const blob = new Blob([text], { type: 'text/plain' });
+    if (!native) download(blob, name);
+    else if (!(await desktop.saveBlob(blob, name, 'cube', 'Cube LUT'))) return text; // cancelled
+  }
+  const warn = lg.spatial.length ? ` — not colour-only, NOT in the LUT: ${lg.spatial.join(', ')}` : '';
+  status(`Exported ${size}³ LUT${lg.sources > 1 ? ` (${lg.sources} sources replaced)` : ''}${warn}`, warn ? 'error' : undefined);
+  return text;
 }
 
 /** The starter project: Image → (VHS / disposable preset) → Output. */

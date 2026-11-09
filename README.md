@@ -39,6 +39,10 @@ trip. You can open any preset and take it apart.
   Analog, Print, Process, Artistic, Optical, Retro and AI.
 - **30 presets** emulating cameras, video formats, print processes and 19th-century photography, plus
   AI-driven looks such as portrait bokeh and real-depth tilt-shift.
+- **Pro photo tools.** Scene-linear tone mapping (AgX, ACES, Filmic…), colour-space conversion, lens
+  correction, Lightroom-style graduated / radial filters with on-image handles, dodge & burn and healing
+  brushes, HDR merge, exposure fusion, focus stacking, smart sharpening, and *File › Export LUT (.cube)*
+  to bake a colour grade into a 3D LUT for other apps. See [docs/FILTERS.md](docs/FILTERS.md).
 - **Custom nodes.** A **GLSL Shader** node for quick one-offs, and a **Node Builder** that turns
   annotated GLSL (`// @param min=0 max=2`) into a reusable node type with sliders. Custom types are
   embedded in project files, so shared projects keep working.
@@ -266,7 +270,11 @@ Architecture, IPC surface and security choices: [docs/DESKTOP.md](docs/DESKTOP.m
 | **Artistic** | Oil Paint (anisotropic Kuwahara), Pencil Sketch, ASCII Art, Pixel Sort, Mosaic/Stained Glass, Emboss |
 | **Optical** | Tilt-Shift, Zoom Blur, Radial Blur, Lens Flare, God Rays, Anaglyph 3D, Kaleidoscope |
 | **Retro** | Palette Quantize (NES, PICO-8, C64, EGA, CGA, Mac Plus, Apple II, ZX Spectrum…), Error Diffusion (Atkinson, Floyd–Steinberg, JJN, Sierra), LCD subpixels |
-| **Utility** | Output, Reroute, Info, Split Compare, Channel View, Histogram Overlay, GLSL Shader |
+| **Color Management** | Tone Map (AgX / ACES / Filmic / Reinhard / Uchimura / Hable), Colour Space Convert (sRGB, P3, Rec.2020, ProPhoto, Adobe RGB, ACEScg), Exposure & White Balance (linear), Hald CLUT, Look pack (Teal & Orange, Bleach Bypass, Kodachrome-ish, Cross Cool, Faded Matte, Day for Night…) |
+| **Lens** | Lens Correction (Brown–Conrady distortion, vignetting, lateral CA, auto-crop), Defringe, Auto Straighten |
+| **Local** | Graduated Filter and Radial Filter (drag the handles in the viewer), Dodge & Burn brush, Heal / Clone brush (Poisson-style healing) |
+| **Photo** | Merge HDR (aligned, deghosted), Exposure Fusion (Mertens), Focus Stack, Smart Sharpen (edge-masked USM / Richardson–Lucy deblur), Texture |
+| **Utility** | Output, Reroute, Info, Split Compare, Channel View, Histogram Overlay, GLSL Shader, Compare Grid, Watermark, Print Frame (gallery mat / film strip / negative carrier) |
 | **AI** | Depth Map, Subject Mask, Depth Fog, Click Select (SAM), Scene Segmentation, Surface Normals, Relight, AI Upscale, Remove Object (LaMa), Colorize B&W, Neural Style, Low-Light Enhance, AI Line Art, AI Denoise, Sky Mask, Sky Replace, Face Detection & Landmarks, Face Restoration, Pose / Body, Smart Auto-Crop, Select by Text, Text Mask (CLIPSeg), Caption & OCR, Optical Flow, Frame Interpolation (RIFE), Smooth Slow Motion, Style from Image, Background Removal (BiRefNet) (models run in the browser, see [docs/AI.md](docs/AI.md)) |
 | **ControlNet** | Canny, Soft Edge, Scribble, M-LSD Lines, Lineart, Depth, Normal Map, OpenPose, Segmentation, Content Shuffle, Tile / Blur, Color Grid, Inpaint Mask, Control Sheet, Generate (Stable Diffusion) (see [docs/CONTROLNET.md](docs/CONTROLNET.md)) |
 
