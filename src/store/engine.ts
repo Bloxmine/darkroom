@@ -125,7 +125,12 @@ function renderNow() {
   const scale = Math.max(floor, Math.min(ui.quality === 'full' ? 1 : Math.min(1, quantize(Math.min(1, zoom) * QUALITY_FACTOR[ui.quality])), previewCapScale(fw, fh))); // cap: Preferences › Performance
   previewScale = scale;
   // AI / heavy nodes stay at the fit-to-window preview resolution while zooming (see RenderOptions.heavyScale).
-  const fitScale = Math.max(floor, Math.min(1, quantize(Math.min(1, fitZoomFor(fw, fh)) * QUALITY_FACTOR[ui.quality]), previewCapScale(fw, fh)));
+  // It is derived from the *project* (source) size, never from the viewed node's size: a node that changes
+  // the image size (AI Upscale ×4, crop, borders) would otherwise feed back into its own inference
+  // resolution — the result changes the viewed size, which changes the scale, which restarts the job.
+  const ps = eng.getProjectSize(graph);
+  const psFloor = quantize(Math.min(1, 256 / Math.max(ps.width, ps.height, 1)));
+  const fitScale = Math.max(psFloor, Math.min(1, quantize(Math.min(1, fitZoomFor(ps.width, ps.height)) * QUALITY_FACTOR[ui.quality]), previewCapScale(ps.width, ps.height)));
   const heavyScale = ui.quality === 'full' || currentPrefs().aiFollowZoom ? undefined : fitScale;
 
   let res;
@@ -136,7 +141,10 @@ function renderNow() {
     eng.present(null, { rect: { x: 0, y: 0, w: 0, h: 0 }, background: BG });
     return;
   }
-  if (res.fullWidth && (res.fullWidth !== lastFull.w || res.fullHeight !== lastFull.h)) {
+  // While something upstream is still computing, the viewed node may report a placeholder size (e.g. the
+  // un-upscaled input). Don't refit to it: that flip-flops the zoom and the preview scale every frame.
+  const pendingNow = [...eng.errors.values()].some((v) => v.startsWith('[pending]'));
+  if (res.fullWidth && (res.fullWidth !== lastFull.w || res.fullHeight !== lastFull.h) && (!pendingNow || !lastFull.w)) {
     const first = !lastFull.w;
     lastFull = { w: res.fullWidth, h: res.fullHeight };
     if (!first || ui.fit) requestRender(); // re-run with the right size
