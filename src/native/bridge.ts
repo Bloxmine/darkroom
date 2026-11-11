@@ -16,6 +16,8 @@ import { useUi } from '../store/ui';
 import { commands, keyHooks } from '../ui/commands';
 import type { MenuItem } from '../ui/Menu';
 import { MENUS } from '../ui/MenuBar';
+import { subscribePanels } from '../ui/workspace/panels';
+import { useWorkspaceStore } from '../ui/workspace/store';
 import type { EditRole, NativeMenuItem, NativeMenuState, NativeMenuTemplate } from './api';
 import { handleOpenedFiles, saveProject, useDocFile } from './files';
 import { native } from './native';
@@ -136,6 +138,7 @@ function buildTemplate(): NativeMenuTemplate {
       { label: 'Edit', items: menuItems('Edit', ['edit.prefs']) },
       { label: 'View', items: [...menuItems('View'), sep, role('togglefullscreen'), role('toggleDevTools', 'Developer Tools')] },
       { label: 'Node', items: menuItems('Node') },
+      ...(MENUS.some((m) => m.title === 'Label') ? [{ label: 'Label', items: menuItems('Label') }] : []), // file browser (src/ui/browser/commands.ts)
       { label: 'Window', role: 'windowMenu', items: [role('minimize'), role('zoom'), sep, ...menuItems('Window'), sep, role('front')] },
       { label: 'Help', role: 'help', items: menuItems('Help', ['help.about']) },
     ],
@@ -210,6 +213,8 @@ export function initNative(booted: Promise<unknown>) {
   useUi.subscribe(scheduleMenu);
   useSettings.subscribe(scheduleMenu);
   subscribeRegistry(scheduleMenu);
+  useWorkspaceStore.subscribe(scheduleMenu); // Window › Workspace / panel checks
+  subscribePanels(scheduleMenu);
   window.addEventListener('focusin', scheduleMenu);
   window.addEventListener('focusout', scheduleMenu);
 

@@ -187,6 +187,7 @@ launch's window background.
 | `coreml.addFolder()` / `removeFolder(id)` / `revealModelsFolder()` | invoke / send | extra model folders are chosen in a native folder picker in main (e.g. Mochi Diffusion's), stored in `userData/coreml.json` |
 | `coreml.download(catalogId, true)` / `cancelDownload(id)` / `deleteModel(id)` | invoke / send | curated catalog items only (`src/core/sd/coreml-catalog.ts`), only after the licence was accepted; deletes are limited to Darkroom's own models folder and go to the Trash |
 | `coreml.clearCache()` / `unload()` | invoke | quit the helper and delete Core ML's compiled-model cache / free model memory |
+| `files.*` (`roots`, `addRoot`, `list`, `stat`, `read`, `thumb`, `meta`, `writeXmp`, `rename`, `transfer`, `trash`, `reveal`, `openDefault`, `mkdir`, `watch`, `onChange`) | invoke / send / event | the Browse workspace's file browser (`electron/files/ipc.ts`); every path is checked by `electron/files/guard.ts` against the granted folders — see [BROWSER.md](BROWSER.md) |
 
 ## Security choices
 
@@ -196,6 +197,11 @@ launch's window background.
   native dialog or handed over via Finder. Writes without a dialog only go to project files the user
   opened or saved through a dialog/Finder before ("granted" paths, remembered in `window-state.json`).
   Any other path from the renderer gets a save dialog.
+- The file browser (`files.*`) takes paths, but main resolves each one with `realpath` (symlinks, `..`)
+  and only accepts it inside a folder the user granted (Add Folder… dialog, the folder of a file opened
+  from Finder, or ~/Pictures, ~/Desktop, ~/Downloads; `file-roots.json`). It writes only XMP sidecars,
+  never-overwriting renames/moves/copies and new folders; deletions go to the Trash. See
+  [BROWSER.md](BROWSER.md).
 - Navigation away from `app://darkroom` (or the dev server) is blocked. `http(s)` links (About box
   credits) open in the default browser, and `window.open` is denied.
 - Permissions: only `media` (webcam nodes), clipboard read/sanitized-write, fullscreen and pointer

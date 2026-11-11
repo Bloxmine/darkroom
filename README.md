@@ -112,6 +112,14 @@ trip. You can open any preset and take it apart.
   (WebAssembly, in a worker) by a **RAW Photo** node: white balance, exposure, highlight recovery,
   demosaic and noise reduction, with the full 16-bit data on the GPU. See
   [docs/RAW_AND_BATCH.md](docs/RAW_AND_BATCH.md).
+- **Bridge-style file browser.** The *Browse* and *Filmstrip* workspaces turn Darkroom into an Adobe
+  Bridge: Folders, Favorites, a virtualised thumbnail grid / details list / filmstrip (QuickLook thumbnails
+  in the Mac app), Preview with 2–4-up compare and full-screen Review (<kbd>Space</kbd>), Metadata (EXIF,
+  editable IPTC Core, GPS), Keywords, a Filter panel with facet counts, and Collections / Smart
+  Collections. Ratings (<kbd>0</kbd>–<kbd>5</kbd>, Reject), Bridge's colour labels (<kbd>6</kbd>–<kbd>9</kbd>)
+  and keywords go into XMP sidecars that Bridge and Lightroom read; image files are never modified.
+  Batch Rename, Move to Trash, Reveal in Finder, drag thumbnails onto the graph or viewer, and
+  <kbd>Enter</kbd> opens a photo, RAW, video or project in the editor. See [docs/BROWSER.md](docs/BROWSER.md).
 - **Batch processing.** *File › Batch Process…* runs the current graph over many photos or a folder
   and saves a ZIP or writes into a folder, with progress, ETA and per-file errors.
 - **Video.** Drop an MP4/WebM/MOV onto the graph for a **Video** node (frame-accurate WebCodecs
@@ -218,6 +226,37 @@ On macOS, <kbd>⌘</kbd> works wherever <kbd>Ctrl</kbd> is listed. Help → Keyb
 | Minimap | Corner button or <kbd>Shift</kbd>+<kbd>M</kbd>; right-click the button to move it |
 
 With a node selected, new nodes go to its right and are connected to it (Preferences → General).
+
+### Workspaces and panels
+
+Panels dock like Adobe Bridge CS3. Drag a panel's tab onto another panel to dock it to the left, right,
+top or bottom (or drop it on the tab bar to make it a tab there; near the window edge to dock along the
+edge). Drag the splitters to resize, double-click a tab to maximize it, and use the panel menu (≡) to
+minimize a group to a slim bar, close a panel or add another one. Window lists every panel.
+
+The switcher at the right of the toolbar holds three workspaces (right-click one to keep it there); its
+▾ menu and **Window → Workspace** list all of them:
+
+| Workspace | Layout | Shortcut |
+|---|---|---|
+| Essentials | Library · Viewer over Node Graph · Properties | <kbd>Ctrl</kbd>+<kbd>F1</kbd> |
+| Browse | Folders / Favorites / Collections + Filter · Content · Preview over Metadata / Keywords | <kbd>Ctrl</kbd>+<kbd>F2</kbd> |
+| Filmstrip | Large Preview with the Filmstrip along the bottom | <kbd>Ctrl</kbd>+<kbd>F3</kbd> |
+| Light Table | Content only | <kbd>Ctrl</kbd>+<kbd>F4</kbd> |
+| Graph | Large Node Graph with Library, a small Viewer and Properties | <kbd>Ctrl</kbd>+<kbd>F5</kbd> |
+| Viewer | Large Viewer with Scopes and Properties (graph minimized) | <kbd>Ctrl</kbd>+<kbd>F6</kbd> |
+| Metadata | Content and a large Metadata panel | |
+
+Rearrangements are remembered per workspace until **Reset Workspace**. **New Workspace…** saves the
+current arrangement under a name (an existing name is overwritten); your workspaces can be renamed and
+deleted, and travel with Preferences → Advanced → Export. Preferences → General picks the workspace
+opened at launch (or remembers the last one).
+
+The **Node Library** has four views (buttons in its header): **List** (the tree), **Icons** (large icons
+or, with *Previews* on, each node applied to the current image; size slider at the bottom), **Details**
+(a table sortable by name, category, kind, description, inputs, outputs) and **Compact** (dense rows,
+in columns when wide). Filter by category and sort A–Z, by category or by recent use; arrow keys move the
+selection, <kbd>Enter</kbd> adds, <kbd>Space</kbd> stars.
 
 ## Mac app
 

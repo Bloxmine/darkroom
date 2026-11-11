@@ -573,7 +573,10 @@ function ScopeStats() {
   );
 }
 
-function ScopesBody({ onTitleDown }: { onTitleDown?: (e: React.PointerEvent) => void }) {
+/** Mounted Scopes workspace panels (src/ui/workspace/corePanels.tsx): the viewer's own dock / float stand down. */
+export const useScopesPanel = create<{ mounted: number }>(() => ({ mounted: 0 }));
+
+export function ScopesBody({ onTitleDown, panel }: { onTitleDown?: (e: React.PointerEvent) => void; panel?: boolean }) {
   const v = useViewer();
   const vzoom = useScopeData((s) => s.vzoom);
   const kinds: Exclude<ScopeType, 'all'>[] = v.scopeType === 'all' ? ['histogram', 'waveform', 'vectorscope', 'parade'] : [v.scopeType];
@@ -597,12 +600,14 @@ function ScopesBody({ onTitleDown }: { onTitleDown?: (e: React.PointerEvent) => 
           ))}
         </span>
         <span className="flex1" />
+        {!panel && <>
         <button className="vx-iconbtn" title={v.scopesDock === 'right' ? 'Float the scopes' : 'Dock beside the viewer'} onPointerDown={(e) => e.stopPropagation()} onClick={() => useViewer.setState({ scopesDock: v.scopesDock === 'right' ? 'float' : 'right' })}>
           <Icon name={v.scopesDock === 'right' ? 'application_double' : 'application_side_list'} />
         </button>
         <button className="vx-iconbtn" title="Close scopes (Shift+S)" onPointerDown={(e) => e.stopPropagation()} onClick={() => useViewer.setState({ scopes: false })}>
           <Icon name="cross" />
         </button>
+        </>}
       </div>
       {(v.scopeType === 'histogram' || v.scopeType === 'waveform' || v.scopeType === 'vectorscope' || v.scopeType === 'all') && (
         <div className="vx-scopes-sub">
@@ -646,7 +651,8 @@ function ScopesBody({ onTitleDown }: { onTitleDown?: (e: React.PointerEvent) => 
 
 /** Docked beside the viewer canvas (inside the viewer panel). */
 export function ScopesDock() {
-  const on = useViewer((s) => s.scopes && s.scopesDock === 'right');
+  const inPanel = useScopesPanel((s) => s.mounted > 0);
+  const on = useViewer((s) => s.scopes && s.scopesDock === 'right') && !inPanel;
   const width = useViewer((s) => s.scopesWidth);
   const start = useRef(0);
   if (!on) return null;
@@ -666,7 +672,8 @@ export function ScopesDock() {
 
 /** Floating over the window; drag the header, resize from the corner. */
 export function ScopesFloat() {
-  const on = useViewer((s) => s.scopes && s.scopesDock === 'float');
+  const inPanel = useScopesPanel((s) => s.mounted > 0);
+  const on = useViewer((s) => s.scopes && s.scopesDock === 'float') && !inPanel;
   const f = useViewer((s) => s.scopesFloat);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {

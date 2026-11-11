@@ -10,6 +10,8 @@ import { viewerMenuItems } from './viewer/viewerCommands';
 import { categoryIcon, nodeIcon } from './Icon';
 import { MenuList, useOutsideClose, type MenuItem } from './Menu';
 import { useRegistry } from './useRegistry';
+import { panelMenuItems, workspaceMenuItems } from './workspace/commands';
+import { useWorkspaceStore } from './workspace/store';
 
 function addAt() {
   return graphApi.mouseFlowPos() ?? freeSpot();
@@ -168,7 +170,14 @@ export const MENUS: { title: string; items: () => MenuItem[] }[] = [
   },
   {
     title: 'Window',
-    items: () => [{ cmd: 'view.library' }, { cmd: 'view.properties' }, { sep: true }, { cmd: 'edit.plugins' }, { cmd: 'view.diagnostics' }],
+    items: () => [
+      { label: 'Workspace', icon: 'layouts', submenu: workspaceMenuItems },
+      { sep: true },
+      ...panelMenuItems(),
+      { sep: true },
+      { cmd: 'edit.plugins' },
+      { cmd: 'view.diagnostics' },
+    ],
   },
   {
     title: 'Help',
@@ -182,6 +191,7 @@ export function MenuBar() {
   useDoc((s) => s.past.length + s.future.length + s.selection.length + s.path.length); // refresh enabled states
   useUi((s) => s.compare);
   useSettings((s) => s.pref);
+  useWorkspaceStore((s) => s.current + '|' + s.layouts[s.current]?.root?.id); // Window menu checks
   const close = () => setOpen(null);
   return (
     <div className="menubar" onMouseDown={(e) => e.stopPropagation()}>

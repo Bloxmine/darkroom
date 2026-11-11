@@ -18,6 +18,10 @@ import { DiagnosticsHost } from './ui/diagnostics/Diagnostics';
 import * as launch from './store/launch';
 import * as batch from './store/batch';
 import { status, useUi } from './store/ui';
+import * as workspace from './ui/workspace/store';
+import { listPanels } from './ui/workspace/panels';
+import { BrowserHost } from './ui/browser'; // Bridge-style file browser: registers the browser.* panels
+import { startProjectPreview } from './store/projectPreview';
 
 setAutoFreeze(false);
 loadBuiltins();
@@ -46,14 +50,14 @@ declare global {
     __darkroom?: unknown;
   }
 }
-window.__darkroom = { doc, actions, io, engine, ui: useUi, settings: useSettings, setTheme, requestRender, launch, batch };
+window.__darkroom = { doc, actions, io, engine, ui: useUi, settings: useSettings, setTheme, requestRender, launch, batch, workspace: { ...workspace, listPanels } };
 
 const booted = boot()
   .catch((e) => {
     console.error(e);
     status(`Startup failed: ${(e as Error).message}`, 'error');
   })
-  .finally(() => startAutosave());
+  .finally(() => (startAutosave(), startProjectPreview()));
 // diagnostics first, so errors during boot are captured (Window › Diagnostics)
 initDiagnostics();
 bindDiagSettings(() => {
@@ -74,6 +78,7 @@ function Root() {
       <App ready={ready} />
       <PrefsHost />
       <DiagnosticsHost />
+      <BrowserHost />
     </>
   );
 }

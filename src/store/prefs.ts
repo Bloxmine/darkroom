@@ -105,7 +105,22 @@ export interface Prefs {
   /** Add-node search: recently added and starred entries ('n:<type>' / 'p:<preset id>'). */
   addRecent: string[];
   addFavorites: string[];
+  // Workspaces (src/ui/workspace): the one opened at launch, and the user's saved layouts
+  defaultWorkspace: string;
+  /** Reopen the workspace that was active when the app was last closed (else `defaultWorkspace`). */
+  rememberWorkspace: boolean;
+  customWorkspaces: { id: string; name: string; layout: unknown }[];
+  // Node Library panel views
+  libraryView: LibraryView;
+  /** Tile size of the Icons view in px. */
+  libraryIconSize: number;
+  /** Live preview thumbnails of each node in the Icons view (off: category icons). */
+  libraryPreviews: boolean;
+  librarySort: LibrarySort;
 }
+
+export type LibraryView = 'list' | 'icons' | 'details' | 'compact';
+export type LibrarySort = 'name' | 'category' | 'recent';
 
 export type MinimapPos = 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
 
@@ -166,6 +181,13 @@ export const PREF_DEFAULTS: Prefs = {
   insertOnWire: true,
   addRecent: [],
   addFavorites: [],
+  defaultWorkspace: 'essentials',
+  rememberWorkspace: true,
+  customWorkspaces: [],
+  libraryView: 'list',
+  libraryIconSize: 72,
+  libraryPreviews: false,
+  librarySort: 'category',
 };
 
 /** Allowed values for enumerated prefs (validation of imported / stored JSON). */
@@ -193,12 +215,15 @@ const ENUMS: Partial<Record<keyof Prefs, readonly unknown[]>> = {
   eyedropperSize: [1, 3, 5],
   compareLayout: ['h', 'v', 'toggle'],
   presetThumbSize: [140, 200, 260],
+  libraryView: ['list', 'icons', 'details', 'compact'],
+  librarySort: ['name', 'category', 'recent'],
 };
 const RANGES: Partial<Record<keyof Prefs, [number, number]>> = {
   undoDepth: [10, 1000],
   exportQuality: [0.1, 1],
   clipLow: [0, 64],
   clipHigh: [192, 255],
+  libraryIconSize: [40, 160],
 };
 
 /** Keep only valid, known keys (unknown or malformed values fall back to the default). */
@@ -209,6 +234,15 @@ export function sanitizePrefs(x: unknown): Prefs {
     const v = src[k];
     const d = PREF_DEFAULTS[k];
     if (v === undefined) continue;
+    if (k === 'customWorkspaces') {
+      // shape only; layouts are validated by src/ui/workspace/workspaces.ts (sanitizeSaved)
+      if (Array.isArray(v))
+        out[k] = v
+          .filter((w): w is { id: string; name: string; layout: unknown } => !!w && typeof w === 'object' && typeof w.id === 'string' && typeof w.name === 'string' && !!w.layout && typeof w.layout === 'object')
+          .slice(0, 50)
+          .map((w) => ({ id: w.id.slice(0, 40), name: w.name.slice(0, 60), layout: w.layout }));
+      continue;
+    }
     const en = ENUMS[k];
     if (en) {
       if (en.includes(v)) out[k] = v;

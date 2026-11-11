@@ -1,0 +1,335 @@
+/* Node Library views (src/ui/Library.tsx): List (tree, styled in App.css / mac.css), Icons,
+   Details, Compact. Classic first; the Mac themes override with --m-* tokens at the end. */
+
+.lib-views {
+  display: inline-flex;
+  gap: 1px;
+}
+.lib-filter {
+  display: flex;
+  gap: 4px;
+  padding: 0 4px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.lib-filter .field {
+  flex: 1;
+  min-width: 0;
+}
+.lib-scroll:focus {
+  outline: none;
+}
+.lib-scroll:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--sel);
+}
+
+/* --- Icons ------------------------------------------------------------------------------ */
+.tree.lib-icons {
+  padding-bottom: 6px;
+}
+.lib-ic-section > .tree-section {
+  margin-bottom: 1px;
+}
+.lib-ic-cat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  margin: 2px 4px 0 10px;
+  padding: 0 4px 0 2px;
+  border-bottom: 1px solid var(--line);
+  font-weight: bold;
+  white-space: nowrap;
+  cursor: default;
+}
+.lib-ic-cat-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lib-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--lib-tile, 72px) + 10px), 1fr));
+  gap: 3px;
+  padding: 4px 6px 6px 12px;
+}
+.lib-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 4px 2px 3px;
+  border: 1px solid transparent;
+  cursor: grab;
+}
+.lib-tile-img {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--lib-tile, 72px);
+  max-width: 100%;
+  height: calc(var(--lib-tile, 72px) * 0.75);
+  background: var(--field);
+  border: 1px solid var(--line);
+  box-shadow: 1px 1px 0 var(--hi);
+  overflow: hidden;
+}
+.lib-tile-img img.icon {
+  width: clamp(24px, calc(var(--lib-tile, 72px) * 0.44), 64px);
+  height: clamp(24px, calc(var(--lib-tile, 72px) * 0.44), 64px);
+  image-rendering: auto;
+}
+.lib-tile-img.thumb {
+  background: var(--dk);
+}
+.lib-tile-img.thumb img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.lib-tile-name {
+  width: 100%;
+  font-size: 10px;
+  line-height: 12px;
+  text-align: center;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+}
+.lib-tile:hover .lib-tile-img {
+  border-color: var(--sel);
+}
+.lib-tile.selected {
+  background: var(--sel);
+  color: var(--sel-text);
+  border-color: var(--dk);
+}
+.lib-tile .lib-star {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+.lib-tile:hover .lib-star {
+  opacity: 1;
+}
+.lib-tile .field.lib-rename {
+  width: 100%;
+}
+
+.lib-bottombar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  flex: none;
+  padding: 0 6px;
+  border-top: 1px solid var(--lo);
+  background: var(--face-2);
+}
+.lib-previews {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.lib-size {
+  width: 92px;
+  min-width: 40px;
+  flex: 0 1 92px;
+}
+
+/* --- Details -------------------------------------------------------------------------- */
+.tree.lib-details {
+  padding: 0;
+}
+table.lib-details {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 100%;
+}
+.lib-details th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 19px;
+  padding: 0 6px;
+  text-align: left;
+  font-weight: normal;
+  white-space: nowrap;
+  background: linear-gradient(var(--face-3), var(--face));
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--lo);
+  cursor: default;
+}
+.lib-details th:hover {
+  background: var(--hover);
+}
+.lib-details th.sorted {
+  font-weight: bold;
+}
+.lib-d-arrow {
+  margin-left: 4px;
+  font-size: 8px;
+}
+.lib-details td {
+  height: 18px;
+  padding: 0 6px;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: grab;
+}
+.lib-details tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+.lib-details tbody tr:hover td {
+  background: var(--hover);
+}
+.lib-details tbody tr.selected td {
+  background: var(--sel);
+  color: var(--sel-text);
+}
+.lib-details td.lib-d-name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 200px;
+}
+.lib-details td.lib-d-name .lib-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lib-details td.lib-d-description {
+  max-width: 320px;
+}
+.lib-details .lib-d-star {
+  width: 22px;
+  padding: 0 3px;
+  text-align: center;
+}
+.lib-details tr:hover .lib-star {
+  opacity: 1;
+}
+.lib-details td.lib-d-inputs,
+.lib-details td.lib-d-outputs,
+.lib-details td.lib-d-kind {
+  color: var(--muted);
+}
+.lib-details tr.selected td {
+  color: var(--sel-text);
+}
+
+/* --- Compact --------------------------------------------------------------------------- */
+.lib-cp-cols {
+  column-width: 150px;
+  column-gap: 10px;
+  column-rule: 1px dotted var(--line);
+  padding: 0 4px 4px 10px;
+}
+.lib-cp-cat {
+  padding: 3px 3px 1px;
+  font-size: 9px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--muted);
+  break-after: avoid;
+}
+.lib-cp-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 15px;
+  padding: 0 3px;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  break-inside: avoid;
+  cursor: grab;
+}
+.lib-cp-row img.icon {
+  width: 12px;
+  height: 12px;
+  vertical-align: -2px;
+}
+.lib-cp-row .lib-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lib-cp-row:hover {
+  background: var(--hover);
+}
+.lib-cp-row.selected {
+  background: var(--sel);
+  color: var(--sel-text);
+}
+.lib-cp-fav {
+  margin-left: auto;
+  color: #d9a400;
+}
+
+/* --- Mac themes ------------------------------------------------------------------------- */
+:is([data-theme='aperture'], [data-theme='aqua']) {
+  & .lib-filter {
+    padding: 4px 6px;
+    background: var(--m-subbar);
+    border-bottom: 1px solid var(--m-header-border);
+  }
+  & .lib-ic-cat {
+    border-bottom-color: var(--m-row-line);
+    color: var(--m-text);
+  }
+  & .lib-tile-img {
+    background: var(--m-field);
+    border-color: var(--m-line);
+    box-shadow: none;
+    border-radius: 3px;
+  }
+  & .lib-tile-img.thumb {
+    background: var(--m-viewer);
+  }
+  & .lib-tile:hover .lib-tile-img {
+    border-color: var(--m-sel-flat);
+  }
+  & .lib-tile {
+    border-radius: 4px;
+  }
+  & .lib-tile.selected {
+    background: var(--m-sel);
+    color: var(--m-sel-text);
+    border-color: transparent;
+  }
+  & .lib-bottombar {
+    background: var(--m-subbar);
+    border-top: 1px solid var(--m-header-border);
+    box-shadow: inset 0 1px 0 var(--m-subbar-hi);
+    color: var(--m-header-text);
+  }
+  & .lib-details th {
+    background: var(--m-header);
+    color: var(--m-header-text);
+    border-right-color: var(--m-header-border);
+    border-bottom-color: var(--m-header-border);
+    box-shadow: inset 0 1px 0 var(--m-header-hi);
+  }
+  & .lib-details td.lib-d-inputs,
+  & .lib-details td.lib-d-outputs,
+  & .lib-details td.lib-d-kind,
+  & .lib-cp-cat {
+    color: var(--m-text-dim);
+  }
+  & .lib-details tbody tr.selected td,
+  & .lib-cp-row.selected {
+    background: var(--m-sel-flat);
+    color: var(--m-sel-text);
+  }
+  & .lib-details tbody tr:hover td,
+  & .lib-cp-row:hover {
+    background: var(--m-hover);
+  }
+  & .lib-cp-cols {
+    column-rule-color: var(--m-row-line);
+  }
+}

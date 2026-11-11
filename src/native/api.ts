@@ -8,6 +8,9 @@
  * caller falls back to the web code path.
  */
 
+import type { FileMetaResult, FsCaps, FsChange, FsEntry, FsRoot, RenameOutcome, RenamePair, ThumbResult } from '../core/files/types';
+import type { XmpData } from '../core/files/xmp';
+
 /** A serialisable native menu item, built in the renderer from the command table. */
 export type NativeMenuItem =
   | {
@@ -192,6 +195,44 @@ export interface CoreMLApi {
   unload(): Promise<void>;
 }
 
+/**
+ * File browser (Bridge-style Browse workspace; electron/files/ipc.ts). Every path is validated in main:
+ * it must resolve (realpath, `..` collapsed) inside a root the user granted — a folder picked in the
+ * Add Folder dialog, the parent folder of a file opened from Finder, or the default ~/Pictures,
+ * ~/Desktop, ~/Downloads. Nothing ever overwrites an existing file; deletions go to the Trash.
+ */
+export interface FilesApi {
+  caps: FsCaps;
+  /** Granted roots + the default locations. */
+  roots(): Promise<FsRoot[]>;
+  /** Folder picker; grants and returns the chosen folder (null if cancelled). */
+  addRoot(): Promise<FsRoot | null>;
+  removeRoot(path: string): Promise<void>;
+  list(dir: string, opts?: { hidden?: boolean }): Promise<FsEntry[]>;
+  stat(path: string): Promise<FsEntry | null>;
+  /** File bytes (optionally a byte range). */
+  read(path: string, range?: { start: number; length: number }): Promise<Uint8Array>;
+  /** QuickLook thumbnail (cached on disk in ~/Library/Caches/darkroom-thumbs), or null if QuickLook can't make one. */
+  thumb(path: string, size: number): Promise<ThumbResult | null>;
+  /** EXIF/IPTC summary + XMP sidecar text, for many files at once. */
+  meta(paths: string[]): Promise<FileMetaResult[]>;
+  /** Write the managed XMP fields (Rating, Label, keywords, IPTC Core) into the file's sidecar; returns the sidecar path. */
+  writeXmp(path: string, data: XmpData): Promise<string>;
+  /** Rename files within their folders (two-phase, never overwrites; sidecars follow). */
+  rename(pairs: RenamePair[]): Promise<RenameOutcome[]>;
+  /** Move or copy into a folder (never overwrites; sidecars follow). Resolves with the new paths. */
+  transfer(paths: string[], destDir: string, mode: 'move' | 'copy'): Promise<RenameOutcome[]>;
+  /** Move to the Trash (with their sidecars). */
+  trash(paths: string[]): Promise<RenameOutcome[]>;
+  reveal(path: string): void;
+  openDefault(path: string): Promise<string>;
+  mkdir(parent: string, name: string): Promise<string>;
+  /** Watch a folder (debounced); returns an id for unwatch. */
+  watch(dir: string): Promise<number>;
+  unwatch(id: number): void;
+  onChange(cb: (c: FsChange) => void): () => void;
+}
+
 /** `window.darkroomNative` (exposed by electron/preload.ts via contextBridge). */
 export interface DarkroomNative {
   platform: 'darwin' | 'win32' | 'linux' | string;
@@ -239,6 +280,8 @@ export interface DarkroomNative {
   setGenServer(url: string | null): void;
   /** Built-in Core ML engine (macOS only; absent elsewhere and in the web build). */
   coreml?: CoreMLApi;
+  /** File browser (Browse workspace). */
+  files?: FilesApi;
 }
 
 /** IPC channel names (shared so they can't drift). */
@@ -272,4 +315,22 @@ export const IPC = {
   coremlDelete: 'darkroom:coreml-delete',
   coremlClearCache: 'darkroom:coreml-clear-cache',
   coremlUnload: 'darkroom:coreml-unload',
+  filesRoots: 'darkroom:files-roots',
+  filesAddRoot: 'darkroom:files-add-root',
+  filesRemoveRoot: 'darkroom:files-remove-root',
+  filesList: 'darkroom:files-list',
+  filesStat: 'darkroom:files-stat',
+  filesRead: 'darkroom:files-read',
+  filesThumb: 'darkroom:files-thumb',
+  filesMeta: 'darkroom:files-meta',
+  filesWriteXmp: 'darkroom:files-write-xmp',
+  filesRename: 'darkroom:files-rename',
+  filesTransfer: 'darkroom:files-transfer',
+  filesTrash: 'darkroom:files-trash',
+  filesReveal: 'darkroom:files-reveal',
+  filesOpenDefault: 'darkroom:files-open-default',
+  filesMkdir: 'darkroom:files-mkdir',
+  filesWatch: 'darkroom:files-watch',
+  filesUnwatch: 'darkroom:files-unwatch',
+  filesChanged: 'darkroom:files-changed',
 } as const;

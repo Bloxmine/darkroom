@@ -38,6 +38,9 @@ importers:
       codemirror:
         specifier: ^6.0.2
         version: 6.0.2
+      exifr:
+        specifier: ^7.1.3
+        version: 7.1.3
       fflate:
         specifier: ^0.8.3
         version: 0.8.3
@@ -1920,6 +1923,9 @@ packages:
   eta@4.6.0:
     resolution: {integrity: sha512-lW6is4T1NFOYnmqGZIfvixqj7A7sSvScF+DN8EK6K58xI5MZ5UvYe0GjopxOXQtZvUn4eDdVuZ8XSoYWTMEKwA==}
     engines: {node: '>=20'}
+
+  exifr@7.1.3:
+    resolution: {integrity: sha512-g/aje2noHivrRSLbAUtBPWFbxKdKhgj/xr1vATDdUXPOFYJlQ62Ft0oy+72V6XLIpDJfHs6gXLbBLAolqOXYRw==}
 
   expect-type@1.4.0:
     resolution: {integrity: sha512-KfYbmpRm0VbLjEvVa9yGwCi9GI34xvi7A/HXYWQO65CSD2u3MczUJSuwXKFIxlGsgBQizV9q5J9NHj4VG0n+pA==}
@@ -5327,6 +5333,8 @@ snapshots:
   esutils@2.0.3: {}
 
   eta@4.6.0: {}
+
+  exifr@7.1.3: {}
 
   expect-type@1.4.0: {}
 

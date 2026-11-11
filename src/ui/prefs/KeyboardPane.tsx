@@ -11,9 +11,10 @@ const CATEGORY: Record<string, string> = {
   view: 'View',
   node: 'Node',
   playback: 'Playback',
+  window: 'Window',
   help: 'Help',
 };
-const ORDER = ['File', 'Edit', 'View', 'View › Theme', 'Node', 'Playback', 'Help'];
+const ORDER = ['File', 'Edit', 'View', 'View › Theme', 'Node', 'Playback', 'Window', 'Help'];
 const catRank = (c: string) => (ORDER.includes(c) ? ORDER.indexOf(c) : ORDER.length);
 
 /** Order-insensitive form of a combo for conflict detection. */

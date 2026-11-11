@@ -19,6 +19,7 @@ import { importVideoFiles } from './videoImport';
 import { renderReady } from '../core/batch/ready';
 import { buildLutGraph, writeCube } from '../nodes/pro/lut-export';
 import { flatId } from './graphPath';
+import { projectPreviewDataUrl } from './projectPreview';
 
 const serial = (a: Asset) => ({ id: a.id, name: a.name, mime: a.mime, dataUrl: a.dataUrl });
 
@@ -63,7 +64,9 @@ export function serializeProject(): string {
   const r = embedRawAssets(embedVideoAssets(projectForSave(useDoc.getState().project)), (id) => engine?.assets.get(id));
   if (r.missing.length) setTimeout(() => status(`Not embedded (RAW data missing): ${r.missing.join(', ')}`, 'error'), 50);
   else if (r.rawBytes > 25e6) setTimeout(() => status(`Saved with ${(r.rawBytes / 1e6).toFixed(0)} MB of embedded RAW files — the project file is large.`), 50);
-  return JSON.stringify(r.project);
+  // a small JPEG of the output first in the file: the Browse workspace reads just the head for the thumbnail
+  const preview = projectPreviewDataUrl();
+  return JSON.stringify(preview ? { preview, ...r.project } : r.project);
 }
 
 function download(blob: Blob, name: string) {

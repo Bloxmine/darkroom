@@ -1,11 +1,17 @@
 import { useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { openDiagnostics } from '../core/diag';
 import { flattenGraph } from '../core/graph';
 import { effectiveViewed, useDoc } from '../store/doc';
 import { useUi } from '../store/ui';
 import { Icon } from './Icon';
+import { useDock } from './workspace/mounts';
+import { BrowserStatusPane } from './browser/StatusPane';
 
-/** A panel with a bevelled title bar. */
+/**
+ * A panel with a bevelled title bar. Inside the docking workspace (src/ui/workspace) the stack's
+ * tab bar is the title bar: the title (when it says more than the tab) and `tools` render there.
+ */
 export function Panel({
   title,
   icon,
@@ -19,6 +25,21 @@ export function Panel({
   children: ReactNode;
   className?: string;
 }) {
+  const dock = useDock();
+  if (dock)
+    return (
+      <section className={'panel docked' + (className ? ' ' + className : '')}>
+        {dock.tools &&
+          createPortal(
+            <>
+              {title !== dock.title && <span className="dock-info panel-title-text">{title}</span>}
+              {tools && <span className="panel-title-tools">{tools}</span>}
+            </>,
+            dock.tools,
+          )}
+        <div className="panel-body">{children}</div>
+      </section>
+    );
   return (
     <section className={'panel' + (className ? ' ' + className : '')}>
       <header className="panel-title">
@@ -98,6 +119,7 @@ export function StatusBar() {
         <Icon name="node_magnifier" />
         {nodeCount} nodes{levelCount ? ` · depth ${levelCount}` : ''}
       </span>
+      <BrowserStatusPane />
       <span className="sb-pane sb-dirty" title={dirty ? 'Unsaved changes (autosaved to this browser)' : 'Saved'}>
         {dirty ? 'MOD' : ''}
       </span>

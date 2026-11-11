@@ -4,6 +4,7 @@ import { renameProject } from '../store/io';
 import { useUi } from '../store/ui';
 import { commands, displayKeys } from './commands';
 import { Icon } from './Icon';
+import { WorkspaceSwitcher } from './workspace/WorkspaceSwitcher';
 
 const LAYOUT: (string | '|')[] = [
   'file.new',
@@ -64,6 +65,8 @@ export function Toolbar() {
       {LAYOUT.map((id, i) => (id === '|' ? <span key={i} className="tsep" /> : <ToolButton key={id} id={id} />))}
       <span className="flex1" />
       <ProjectName />
+      <span className="tsep" />
+      <WorkspaceSwitcher />
     </div>
   );
 }

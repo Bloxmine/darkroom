@@ -13,6 +13,7 @@ import { openDialog, status, useUi } from '../../store/ui';
 import { useViewer } from '../../store/viewer';
 import { native } from '../../native/native';
 import { Box, Button, Check, fmtBytes, Note, PopUp, Radios, Row, Sep, Stepper, TickSlider } from './controls';
+import { workspaceList } from '../workspace/store';
 
 /** Ask for confirmation in a sheet (provided by the window). */
 export type Ask = (message: string, detail: string, ok: string, run: () => void) => void;
@@ -88,6 +89,24 @@ export function GeneralPane() {
             { value: 50, label: 'More than 50 nodes' },
           ]}
         />
+      </Row>
+      <Sep />
+      <Row label="Workspace at launch">
+        <PopUp
+          label="Workspace at launch"
+          value={workspaceList().some((w) => w.id === s.defaultWorkspace) ? s.defaultWorkspace : 'essentials'}
+          onChange={S('defaultWorkspace')}
+          width={190}
+          options={workspaceList().map((w) => ({ value: w.id, label: w.name }))}
+        />
+      </Row>
+      <Row>
+        <Check checked={s.rememberWorkspace} onChange={S('rememberWorkspace')}>
+          Remember the last workspace (reopen it instead)
+        </Check>
+      </Row>
+      <Row>
+        <Note>Window › Workspace (Ctrl+F1…F6) switches layouts; saved workspaces are included in Advanced › Export.</Note>
       </Row>
       <Sep />
       <Row label="Default project name">

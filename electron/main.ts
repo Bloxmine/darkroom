@@ -25,6 +25,7 @@ import {
   type ThemeSourcePref,
 } from '../src/native/api';
 import { registerCoreML } from './coreml/ipc';
+import { grantRoot, registerFiles } from './files/ipc';
 
 const SCHEME = 'app';
 const HOST = 'darkroom';
@@ -320,6 +321,7 @@ async function flushOpen() {
       } else {
         files.push({ kind: 'image', path: p, name: path.basename(p), data: await readFile(p) });
       }
+      grantRoot(path.dirname(p)); // the Browse workspace may show the folder of a file opened from Finder
     } catch (e) {
       console.warn('[darkroom] could not open', p, e);
     }
@@ -635,6 +637,7 @@ void app.whenReady().then(() => {
   registerIpc();
   installGenServerCors();
   registerCoreML();
+  registerFiles();
   fallbackMenu();
   session.defaultSession.setPermissionRequestHandler((_wc, perm, cb) => cb(ALLOWED_PERMISSIONS.has(perm)));
   session.defaultSession.setPermissionCheckHandler((_wc, perm) => ALLOWED_PERMISSIONS.has(perm));

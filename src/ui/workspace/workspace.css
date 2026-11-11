@@ -1,0 +1,433 @@
+/* Docking workspace (Dock.tsx) and the Bridge-style workspace switcher (WorkspaceSwitcher.tsx).
+   Classic rules first (classic tokens); the Mac themes (aperture / aqua) override with --m-* tokens. */
+
+/* --- layout tree -------------------------------------------------------- */
+.dock-root {
+  position: relative;
+}
+.dock-root > .dock-split,
+.dock-root > .dock-stack {
+  flex: 1;
+}
+.dock-split {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+.dock-split.col {
+  flex-direction: column;
+}
+.dock-cell {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.dock-gap.v {
+  flex: none;
+  width: 5px;
+}
+.dock-gap.h {
+  flex: none;
+  height: 5px;
+}
+
+/* --- stacks (tab groups) ------------------------------------------------- */
+.dock-stack {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--face);
+  border: 1px solid;
+  border-color: var(--lo) var(--hi) var(--hi) var(--lo);
+  outline: 1px solid var(--line);
+  outline-offset: -2px;
+}
+.dock-tabbar.panel-title {
+  padding: 0 2px 0 2px;
+  gap: 0;
+  align-items: stretch;
+}
+.dock-tabs {
+  display: flex;
+  align-items: flex-end;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+.dock-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  min-width: 28px;
+  max-width: 170px;
+  padding: 0 4px 0 6px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  color: var(--muted);
+  cursor: default;
+  white-space: nowrap;
+}
+.dock-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dock-tab:not(.active):hover {
+  color: var(--text);
+}
+.dock-tab.active {
+  flex-shrink: 0;
+  position: relative;
+  top: 1px;
+  background: var(--face);
+  border-color: var(--hi) var(--dk) transparent var(--hi);
+  color: var(--text);
+}
+.dock-tab.missing .dock-tab-label {
+  font-style: italic;
+}
+.dock-tab-close {
+  width: 12px;
+  text-align: center;
+  font-variant: normal;
+  font-weight: normal;
+  opacity: 0;
+  color: var(--muted);
+}
+.dock-tab:hover .dock-tab-close {
+  opacity: 0.8;
+}
+.dock-tab:not(.active):not(:hover) .dock-tab-close {
+  display: none;
+}
+.dock-tab-close:hover {
+  opacity: 1;
+  color: var(--error);
+}
+.dock-tools {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding-left: 8px;
+  overflow: hidden;
+}
+.dock-tools .panel-title-tools {
+  flex: none;
+}
+.dock-info {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dock-btn {
+  flex: none;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 17px;
+  min-width: 18px;
+  padding: 0 2px;
+  margin-left: 2px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: inherit;
+  cursor: default;
+}
+.dock-btn:hover {
+  background: var(--hover);
+  border-color: var(--hover-border);
+}
+.dock-menu-glyph {
+  font-size: 9px;
+  letter-spacing: -1px;
+  font-variant: normal;
+}
+.dock-body {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+.dock-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.panel.docked {
+  border: none;
+  outline: none;
+}
+
+/* minimised groups: a slim bar of tabs */
+.dock-stack.minimized .dock-tools,
+.dock-stack.minimized .dock-menu-btn {
+  display: none;
+}
+.dock-stack.minimized .dock-tab {
+  cursor: pointer;
+}
+.dock-stack.slim-v .dock-tabbar.panel-title {
+  flex: 1;
+  height: auto;
+  flex-direction: column;
+  padding: 4px 0;
+}
+.dock-stack.slim-v .dock-tabs {
+  flex-direction: column;
+  align-items: center;
+}
+.dock-stack.slim-v .dock-tab {
+  writing-mode: vertical-rl;
+  height: auto;
+  padding: 6px 0;
+  max-width: none;
+  max-height: 160px;
+  border: none;
+  top: 0;
+}
+
+/* placeholders */
+.dock-placeholder,
+.dock-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
+  text-align: center;
+  color: var(--muted);
+}
+.dock-placeholder b {
+  color: var(--text);
+}
+.dock-scopes.vx-scopes.docked {
+  flex: 1;
+  width: auto;
+  min-height: 0;
+  border: none;
+}
+
+/* --- drag & drop --------------------------------------------------------- */
+.dock-drop {
+  position: fixed;
+  z-index: 3000;
+  pointer-events: none;
+  box-sizing: border-box;
+  background: color-mix(in srgb, var(--sel) 22%, transparent);
+  border: 2px solid var(--sel);
+  transition:
+    left 70ms,
+    top 70ms,
+    width 70ms,
+    height 70ms;
+}
+.dock-drop.center {
+  background: color-mix(in srgb, var(--sel) 12%, transparent);
+  border-style: dashed;
+}
+.dock-drop.edge {
+  background: color-mix(in srgb, var(--sel) 30%, transparent);
+}
+.dock-ghost {
+  position: fixed;
+  z-index: 3001;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  background: var(--face);
+  color: var(--text);
+  border: 1px solid var(--dk);
+  box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.35);
+  opacity: 0.92;
+  white-space: nowrap;
+}
+body.dock-dragging,
+body.dock-dragging * {
+  cursor: move !important;
+}
+
+/* --- workspace switcher (toolbar, Bridge CS3) ---------------------------- */
+.ws-switcher {
+  display: flex;
+  align-items: stretch;
+  height: 22px;
+  margin-right: 2px;
+  border: 1px solid var(--lo);
+  border-right-color: var(--hi);
+  border-bottom-color: var(--hi);
+  background: var(--face-2);
+}
+.ws-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--line);
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: default;
+}
+.ws-btn:first-child {
+  border-left: none;
+}
+.ws-btn:hover:not(.active) {
+  color: var(--text);
+  background: var(--hover);
+}
+.ws-btn.active {
+  color: var(--sel-text);
+  background: var(--sel);
+  font-weight: bold;
+}
+.ws-btn.pinned::after {
+  content: '';
+  width: 3px;
+  height: 3px;
+  margin-left: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+}
+.ws-more {
+  padding: 0 6px;
+  font-size: 9px;
+}
+.ws-more.open {
+  background: var(--hover);
+}
+
+/* dialogs */
+.ws-dlg {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ws-dlg-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ws-dlg-row .field {
+  flex: 1;
+}
+.ws-dlg p {
+  margin: 0;
+}
+.ws-dlg-warn {
+  color: var(--muted);
+}
+.ws-dlg-err {
+  color: var(--error);
+}
+
+/* --- Mac themes (aperture / aqua) ---------------------------------------- */
+:is([data-theme='aperture'], [data-theme='aqua']) {
+  & .dock-stack {
+    background: var(--m-panel);
+    border: none;
+    outline: none;
+  }
+  & .dock-gap.v {
+    width: 1px;
+    background: var(--m-gap);
+  }
+  & .dock-gap.h {
+    height: 1px;
+    background: var(--m-gap);
+  }
+  & .dock-tabbar.panel-title {
+    padding: 0 4px 0 0;
+  }
+  & .dock-tab {
+    height: 21px;
+    padding: 0 6px 0 9px;
+    border: none;
+    border-right: 1px solid var(--m-header-border);
+    color: var(--m-header-dim);
+    font-weight: bold;
+  }
+  & .dock-tab:not(.active):hover {
+    color: var(--m-header-text);
+  }
+  & .dock-tab.active {
+    top: 0;
+    background: var(--m-subbar);
+    color: var(--m-header-strong);
+    box-shadow:
+      inset 0 1px 0 var(--m-subbar-hi),
+      inset 0 -2px 0 var(--m-sel-flat);
+  }
+  & .dock-btn {
+    border-radius: 3px;
+  }
+  & .dock-btn:hover {
+    background: var(--m-hover);
+    border-color: transparent;
+  }
+  & .dock-ghost {
+    background: var(--m-hud-pop);
+    color: var(--m-hud-pop-text);
+    border-color: var(--m-hud-pop-border);
+    border-radius: 4px;
+  }
+  & .dock-drop {
+    background: color-mix(in srgb, var(--m-sel-flat) 24%, transparent);
+    border-color: var(--m-sel-flat);
+    border-radius: 3px;
+  }
+  & .dock-placeholder,
+  & .dock-empty {
+    color: var(--m-text-dim);
+  }
+  & .dock-placeholder b {
+    color: var(--m-text);
+  }
+
+  & .ws-switcher {
+    height: 22px;
+    border: 1px solid var(--m-seg-border);
+    border-radius: var(--m-radius);
+    background: var(--m-seg);
+    box-shadow:
+      inset 0 1px 0 var(--m-seg-hi),
+      0 1px 0 var(--m-seg-drop);
+    overflow: hidden;
+  }
+  & .ws-btn {
+    border-left: 1px solid var(--m-seg-border);
+    color: var(--m-bar-text);
+    text-shadow: var(--m-bar-shadow);
+  }
+  & .ws-btn:first-child {
+    border-left: none;
+  }
+  & .ws-btn:hover:not(.active) {
+    background: var(--m-seg-hover);
+  }
+  & .ws-btn.active {
+    background: var(--m-seg-pressed);
+    color: var(--m-text-strong);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.45);
+    font-weight: bold;
+  }
+  & .ws-more.open {
+    background: var(--m-seg-pressed);
+  }
+}
