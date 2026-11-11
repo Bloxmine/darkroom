@@ -3,7 +3,8 @@
  * ComfyUI API workflow (comfy.ts) or an AUTOMATIC1111 / Forge / SD.Next API payload (a1111.ts).
  */
 
-export type ServerKind = 'comfyui' | 'a1111';
+/** 'coreml' = the built-in Core ML engine of the Mac app (no URL; src/core/sd/coreml.ts). */
+export type ServerKind = 'comfyui' | 'a1111' | 'coreml';
 
 export interface ControlUnitSpec<I> {
   /** Control map (already the final ControlNet input; no server-side preprocessor is run). */
@@ -47,4 +48,6 @@ export interface ServerLists {
   controlnets: string[];
   samplers: string[];
   schedulers: string[];
+  /** Display names for list values that are opaque ids (Core ML). */
+  labels?: Record<string, string>;
 }

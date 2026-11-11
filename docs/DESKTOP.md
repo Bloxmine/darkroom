@@ -181,6 +181,12 @@ launch's window background.
 | `ready()` | send | renderer booted, flush queued files |
 | `onSaveBeforeClose(cb)` / `closeAfterSave(saved)` | event / send | closing a window with unsaved changes: main shows Save / Cancel / Don't Save; on Save the renderer saves and replies (a cancelled save dialog keeps the window open, and also cancels ⌘Q) |
 | `setGenServer(url \| null)` | send | Preferences › Generation server; main relaxes CORS/Origin for exactly that origin (see docs/CONTROLNET.md) |
+| `coreml.status()` / `coreml.listModels()` | invoke | built-in Core ML engine (macOS only; absent elsewhere and in the web build): availability, state, folders, cache size / installed models and ControlNets as **ids** (`<root>:<relative path>`), never paths |
+| `coreml.generate(req)` / `coreml.cancel(jobId)` | invoke / send | one job at a time (later jobs queue); images travel as PNG bytes; main resolves ids to paths from its own scan |
+| `coreml.onEvent(cb)` | event | `job` progress (queued / planning / compiling / loading / encoding / denoising / decoding), engine `state`, `download` progress, and `log` lines (helper stderr, exits) that the renderer prints as `[darkroom coreml] …` |
+| `coreml.addFolder()` / `removeFolder(id)` / `revealModelsFolder()` | invoke / send | extra model folders are chosen in a native folder picker in main (e.g. Mochi Diffusion's), stored in `userData/coreml.json` |
+| `coreml.download(catalogId, true)` / `cancelDownload(id)` / `deleteModel(id)` | invoke / send | curated catalog items only (`src/core/sd/coreml-catalog.ts`), only after the licence was accepted; deletes are limited to Darkroom's own models folder and go to the Trash |
+| `coreml.clearCache()` / `unload()` | invoke | quit the helper and delete Core ML's compiled-model cache / free model memory |
 
 ## Security choices
 

@@ -24,6 +24,7 @@ import {
   type OpenedFile,
   type ThemeSourcePref,
 } from '../src/native/api';
+import { registerCoreML } from './coreml/ipc';
 
 const SCHEME = 'app';
 const HOST = 'darkroom';
@@ -231,7 +232,9 @@ function createWindow() {
       const name = w.getTitle() || 'Untitled';
       // test hook (like DARKROOM_TEST_DIALOG_PATH): 'save' | 'cancel' | 'discard'
       const forced = { save: 0, cancel: 1, discard: 2 }[process.env.DARKROOM_TEST_CLOSE_CHOICE ?? ''];
-      const r = forced !== undefined ? { response: forced } : await dialog.showMessageBox(w, {
+      // the forced answer arrives on a later tick, like the real dialog's: answering synchronously would close the
+      // window and re-call app.quit() inside this prevented 'close' event, where Electron drops the quit
+      const r = forced !== undefined ? await new Promise<{ response: number }>((res) => setTimeout(() => res({ response: forced }), 0)) : await dialog.showMessageBox(w, {
         type: 'warning',
         buttons: ['Save', 'Cancel', 'Don’t Save'],
         defaultId: 0,
@@ -631,6 +634,7 @@ void app.whenReady().then(() => {
   registerAppProtocol();
   registerIpc();
   installGenServerCors();
+  registerCoreML();
   fallbackMenu();
   session.defaultSession.setPermissionRequestHandler((_wc, perm, cb) => cb(ALLOWED_PERMISSIONS.has(perm)));
   session.defaultSession.setPermissionCheckHandler((_wc, perm) => ALLOWED_PERMISSIONS.has(perm));

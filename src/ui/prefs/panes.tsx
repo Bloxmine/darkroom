@@ -1,5 +1,6 @@
 /** The Preferences panes (except Keyboard, see KeyboardPane.tsx). Every control applies live. */
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { openDiagnostics } from '../../core/diag';
 import { listInstalledPlugins, pluginsVersion, subscribePlugins } from '../../core/plugins';
 import { MODELS } from '../../core/ai/models';
 import { deleteCached, listCached, cacheAvailable } from '../../core/ai/cache';
@@ -860,6 +861,16 @@ export function AdvancedPane({ ask }: PaneProps) {
         <Check checked={s.showFps} onChange={S('showFps')}>
           Show frame rate and render time overlay
         </Check>
+      </Row>
+      <Row label="Diagnostics" top col>
+        <Check checked={s.errorToasts} onChange={S('errorToasts')}>
+          Show errors as on-screen notifications
+        </Check>
+        <Check checked={s.verboseDiagnostics} onChange={S('verboseDiagnostics')}>
+          Verbose mode: log every render, AI job, model download and helper message
+        </Check>
+        <Button onClick={() => openDiagnostics()}>Open Diagnostics…</Button>
+        <Note>Window › Diagnostics (Ctrl+Alt+D) shows the log; copy or save it to report a problem.</Note>
       </Row>
       <Row label="Developer" top col>
         <Check checked={s.showNodeIds} onChange={S('showNodeIds')}>

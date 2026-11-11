@@ -77,6 +77,121 @@ export interface FileFilter {
   extensions: string[];
 }
 
+// --- Built-in Core ML Stable Diffusion engine (Mac app only; electron/coreml/*, native/coreml-sd) ---
+export type CoreMLComputeUnits = 'cpuAndNeuralEngine' | 'cpuAndGPU' | 'all';
+export type CoreMLScheduler = 'dpm++' | 'dpm++karras' | 'pndm';
+
+export interface CoreMLModelInfo {
+  /** Opaque id (`<root>:<relative path>`); the renderer never sends paths. */
+  id: string;
+  name: string;
+  /** Folder label (“Darkroom” or the added folder's name). */
+  root: string;
+  kind: 'sd15' | 'sd2' | 'sdxl' | 'unknown';
+  attention: 'splitEinsum' | 'original' | 'unknown';
+  width: number;
+  height: number;
+  controlNetSupport: boolean;
+  img2img: boolean;
+  bytes: number;
+  /** Inside Darkroom's own models folder (can be deleted from Preferences). */
+  deletable: boolean;
+}
+export interface CoreMLControlNetInfo {
+  id: string;
+  name: string;
+  root: string;
+  attention: 'splitEinsum' | 'original' | 'unknown';
+  width: number;
+  height: number;
+  /** Model card id from the metadata, e.g. lllyasviel/control_v11p_sd15_canny. */
+  version: string;
+  bytes: number;
+  deletable: boolean;
+}
+export interface CoreMLModelList {
+  models: CoreMLModelInfo[];
+  controlNets: CoreMLControlNetInfo[];
+}
+export type CoreMLEngineState = 'stopped' | 'starting' | 'idle' | 'loading' | 'compiling' | 'ready' | 'busy' | 'unloaded' | 'error';
+export interface CoreMLStatus {
+  available: boolean;
+  /** Why the engine is unavailable (Intel without x86_64 helper, macOS < 13.1, helper missing…). */
+  reason?: string;
+  arch: string;
+  state: CoreMLEngineState;
+  helperVersion?: string;
+  neuralEngine?: boolean;
+  loaded?: { modelId: string; computeUnits: CoreMLComputeUnits; unetDevice?: string; note?: string; controlNets: string[] };
+  /** Display only. */
+  modelsDir: string;
+  folders: { id: string; name: string; path: string }[];
+  /** Core ML's compiled-model cache for the helper (bytes). */
+  cacheBytes?: number;
+}
+export interface CoreMLControlInput {
+  controlNetId: string;
+  /** PNG at the model's size; omitted for the inpaint ControlNet with `maskedCond` (built from init + mask). */
+  image?: Uint8Array;
+  weight: number;
+  start: number;
+  end: number;
+  /** ControlNet-inpaint convention: pixels under the mask become −1. */
+  maskedCond?: boolean;
+}
+export interface CoreMLGenerateRequest {
+  jobId: string;
+  modelId: string;
+  computeUnits: CoreMLComputeUnits;
+  prompt: string;
+  negative: string;
+  seed: number;
+  steps: number;
+  guidance: number;
+  scheduler: CoreMLScheduler;
+  /** PNG at the model's size (img2img / inpaint). */
+  init?: Uint8Array;
+  strength?: number;
+  /** PNG mask, white = regenerate (needs `init`). */
+  mask?: Uint8Array;
+  controls: CoreMLControlInput[];
+  reduceMemory?: boolean;
+}
+export interface CoreMLGenerateResult {
+  png: Uint8Array;
+  width: number;
+  height: number;
+  seed: number;
+  timings: Record<string, number>;
+  load?: { ms: number; firstLoad: boolean; unetDevice?: string; note?: string };
+}
+export type CoreMLEvent =
+  | { type: 'job'; jobId: string; phase: 'queued' | 'planning' | 'compiling' | 'loading' | 'encoding' | 'denoising' | 'decoding'; step: number; total: number; message: string }
+  | { type: 'state'; state: CoreMLEngineState; detail?: string }
+  | { type: 'download'; id: string; state: 'downloading' | 'done' | 'error' | 'cancelled'; done: number; total: number; file?: string; error?: string }
+  /** Helper stderr lines, exits and main-side errors, for the renderer console (`[darkroom coreml]`). */
+  | { type: 'log'; level: 'error' | 'warn' | 'info'; message: string };
+
+export interface CoreMLApi {
+  status(): Promise<CoreMLStatus>;
+  listModels(): Promise<CoreMLModelList>;
+  generate(req: CoreMLGenerateRequest): Promise<CoreMLGenerateResult>;
+  cancel(jobId: string): void;
+  onEvent(cb: (e: CoreMLEvent) => void): () => void;
+  /** Folder picker in main (e.g. Mochi Diffusion's models folder); resolves with the new folder list. */
+  addFolder(): Promise<CoreMLStatus['folders']>;
+  removeFolder(id: string): Promise<CoreMLStatus['folders']>;
+  revealModelsFolder(): void;
+  /** Download a catalog item (src/core/sd/coreml-catalog.ts) after the user accepted its licence. */
+  download(catalogId: string, licenseAccepted: true): Promise<void>;
+  cancelDownload(catalogId: string): void;
+  /** Move a model in Darkroom's own folder to the Trash. */
+  deleteModel(id: string): Promise<void>;
+  /** Quit the helper and delete Core ML's compiled-model cache (it recompiles on next use). */
+  clearCache(): Promise<void>;
+  unload(): Promise<void>;
+}
+
 /** `window.darkroomNative` (exposed by electron/preload.ts via contextBridge). */
 export interface DarkroomNative {
   platform: 'darwin' | 'win32' | 'linux' | string;
@@ -122,6 +237,8 @@ export interface DarkroomNative {
    * Origin checks for exactly that origin so a stock ComfyUI / A1111 works without launch flags.
    */
   setGenServer(url: string | null): void;
+  /** Built-in Core ML engine (macOS only; absent elsewhere and in the web build). */
+  coreml?: CoreMLApi;
 }
 
 /** IPC channel names (shared so they can't drift). */
@@ -142,4 +259,17 @@ export const IPC = {
   saveBeforeClose: 'darkroom:save-before-close',
   closeAfterSave: 'darkroom:close-after-save',
   setGenServer: 'darkroom:set-gen-server',
+  coremlStatus: 'darkroom:coreml-status',
+  coremlList: 'darkroom:coreml-list',
+  coremlGenerate: 'darkroom:coreml-generate',
+  coremlCancel: 'darkroom:coreml-cancel',
+  coremlEvent: 'darkroom:coreml-event',
+  coremlAddFolder: 'darkroom:coreml-add-folder',
+  coremlRemoveFolder: 'darkroom:coreml-remove-folder',
+  coremlReveal: 'darkroom:coreml-reveal',
+  coremlDownload: 'darkroom:coreml-download',
+  coremlCancelDownload: 'darkroom:coreml-cancel-download',
+  coremlDelete: 'darkroom:coreml-delete',
+  coremlClearCache: 'darkroom:coreml-clear-cache',
+  coremlUnload: 'darkroom:coreml-unload',
 } as const;

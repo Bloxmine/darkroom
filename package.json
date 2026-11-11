@@ -74,6 +74,16 @@
       "package.json",
       "!node_modules/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "dist-native/darkroom-coreml",
+        "to": "darkroom-coreml",
+        "filter": [
+          "darkroom-coreml",
+          "darkroom-coreml.json"
+        ]
+      }
+    ],
     "asar": true,
     "npmRebuild": false,
     "artifactName": "${productName}-${version}-${arch}.${ext}",
@@ -120,7 +130,8 @@
             }
           }
         ]
-      }
+      },
+      "x64ArchFiles": "Contents/Resources/darkroom-coreml/darkroom-coreml"
     },
     "dmg": {
       "title": "${productName} ${version}"

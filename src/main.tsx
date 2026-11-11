@@ -13,6 +13,8 @@ import * as io from './store/io';
 import { loadAutosave, startAutosave } from './store/persist';
 import { setTheme, useSettings } from './store/settings';
 import { initNative } from './native/bridge';
+import { bindDiagSettings, initDiagnostics, noteEdit } from './core/diag';
+import { DiagnosticsHost } from './ui/diagnostics/Diagnostics';
 import * as launch from './store/launch';
 import * as batch from './store/batch';
 import { status, useUi } from './store/ui';
@@ -52,6 +54,13 @@ const booted = boot()
     status(`Startup failed: ${(e as Error).message}`, 'error');
   })
   .finally(() => startAutosave());
+// diagnostics first, so errors during boot are captured (Window › Diagnostics)
+initDiagnostics();
+bindDiagSettings(() => {
+  const p = useSettings.getState();
+  return { verbose: p.verboseDiagnostics, toasts: p.errorToasts };
+});
+doc.useDoc.subscribe((st, prev) => st.project !== prev.project && noteEdit());
 initNative(booted); // desktop app only (no-op in the browser)
 launch.initLaunch(booted); // PWA share target + file handlers (see docs/RAW_AND_BATCH.md)
 
@@ -64,6 +73,7 @@ function Root() {
     <>
       <App ready={ready} />
       <PrefsHost />
+      <DiagnosticsHost />
     </>
   );
 }

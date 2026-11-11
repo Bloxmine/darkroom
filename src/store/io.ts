@@ -5,7 +5,7 @@ import { getPreset } from '../core/registry';
 import type { Asset, Graph, Project } from '../core/types';
 import { setSelection } from './doc';
 import { commitGraph, commitProject, emptyProject, markSaved, outputNodeId, setProject, useDoc } from './doc';
-import { engine, previewScale, requestRender, resetRenderSize } from './engine';
+import { engine, previewScale, requestRender, resetRenderSize, suspendRender } from './engine';
 import { status, useUi } from './ui';
 import { useSettings } from './settings';
 import { exportBaseName } from './exportName';
@@ -173,10 +173,18 @@ export const EXT: Record<ExportType, string> = { 'image/png': 'png', 'image/jpeg
 
 export async function exportBlob(type: ExportType, quality: number, scale = 1): Promise<Blob> {
   const s = useDoc.getState();
-  await renderReady(engine, s.project.graph, { nodeId: outputNodeId(s.project), scale: 1 }); // wait for async nodes (full-size RAW decode)
-  const blob = await engine.export(s.project.graph, { nodeId: outputNodeId(s.project), type, quality, scale });
-  requestRender();
-  return blob;
+  // The export renders the output at scale 1 in the engine's main cache namespace. Viewer renders (preview scale)
+  // in between would replace every async cpu node's pending run with their own scale and back — each completion
+  // re-invalidating the viewer — so the export never settles and the viewer flickers (seen with sd.generate and
+  // ai.styleFromImage). Like video export, keep the viewer out of the engine until the export is done.
+  suspendRender(true);
+  try {
+    await renderReady(engine, s.project.graph, { nodeId: outputNodeId(s.project), scale: 1 }); // wait for async nodes (full-size RAW decode)
+    return await engine.export(s.project.graph, { nodeId: outputNodeId(s.project), type, quality, scale });
+  } finally {
+    suspendRender(false);
+    requestRender();
+  }
 }
 
 export async function exportImage(type: ExportType, quality: number) {

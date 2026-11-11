@@ -21,7 +21,8 @@ export type DragRender = 'live' | 'pause';
 export type DefaultQuality = 'draft' | 'half' | 'screen';
 export type ExportFormat = 'image/png' | 'image/jpeg' | 'image/webp';
 /** Local Stable Diffusion server for the sd.generate node (see docs/CONTROLNET.md). */
-export type GenServer = 'off' | 'comfyui' | 'a1111';
+export type GenServer = 'off' | 'comfyui' | 'a1111' | 'coreml';
+export type CoreMLUnitsPref = 'cpuAndNeuralEngine' | 'cpuAndGPU' | 'all';
 
 export interface Prefs {
   // General
@@ -77,10 +78,17 @@ export interface Prefs {
   genServer: GenServer;
   genUrlComfy: string;
   genUrlA1111: string;
+  /** Built-in Core ML engine (Mac app): compute units, and lazy loading to save memory. */
+  coremlUnits: CoreMLUnitsPref;
+  coremlReduceMemory: boolean;
   // Keyboard: command id → combo ('' = no shortcut)
   keyOverrides: Record<string, string>;
   // Advanced
   showFps: boolean;
+  /** Log every render, AI job and helper message in Window › Diagnostics. */
+  verboseDiagnostics: boolean;
+  /** Pop up a notification when a node or the app reports an error. */
+  errorToasts: boolean;
   showNodeIds: boolean;
   // Node graph editor (Appearance / General)
   snapToGrid: boolean;
@@ -142,8 +150,12 @@ export const PREF_DEFAULTS: Prefs = {
   genServer: 'off',
   genUrlComfy: 'http://127.0.0.1:8188',
   genUrlA1111: 'http://127.0.0.1:7860',
+  coremlUnits: 'cpuAndNeuralEngine',
+  coremlReduceMemory: false,
   keyOverrides: {},
   showFps: false,
+  verboseDiagnostics: false,
+  errorToasts: true,
   showNodeIds: false,
   snapToGrid: true,
   gridSize: 10,
@@ -175,7 +187,8 @@ const ENUMS: Partial<Record<keyof Prefs, readonly unknown[]>> = {
   gridSize: [5, 10, 20, 25, 50],
   minimapPos: ['bottom-right', 'bottom-left', 'top-right', 'top-left'],
   confirmDeleteOver: [0, 3, 5, 10, 20, 50],
-  genServer: ['off', 'comfyui', 'a1111'],
+  genServer: ['off', 'comfyui', 'a1111', 'coreml'],
+  coremlUnits: ['cpuAndNeuralEngine', 'cpuAndGPU', 'all'],
   scopesType: ['histogram', 'waveform', 'vectorscope', 'parade', 'all'],
   eyedropperSize: [1, 3, 5],
   compareLayout: ['h', 'v', 'toggle'],

@@ -5,6 +5,7 @@ import type { Graph } from '../core/types';
 import { effectiveViewed, useDoc } from './doc';
 import { useUi, type Quality } from './ui';
 import { currentPrefs, previewCapScale, useSettings } from './settings';
+import { log as diagLog, verbose } from '../core/diag';
 import { CHANNEL_INDEX, useViewer } from './viewer';
 import { copyTexture } from '../core/readback';
 
@@ -144,6 +145,8 @@ function renderNow() {
   // While something upstream is still computing, the viewed node may report a placeholder size (e.g. the
   // un-upscaled input). Don't refit to it: that flip-flops the zoom and the preview scale every frame.
   const pendingNow = [...eng.errors.values()].some((v) => v.startsWith('[pending]'));
+  if (res.evaluated > 0 && verbose())
+    diagLog('debug', 'render', `${target ?? 'output'} @ ${scale}${heavyScale !== undefined ? ` (AI ${heavyScale})` : ''} → ${res.width}×${res.height}, ${res.evaluated} node${res.evaluated === 1 ? '' : 's'}, ${res.ms.toFixed(1)} ms${pendingNow ? ', waiting on async nodes' : ''}`);
   if (res.fullWidth && (res.fullWidth !== lastFull.w || res.fullHeight !== lastFull.h) && (!pendingNow || !lastFull.w)) {
     const first = !lastFull.w;
     lastFull = { w: res.fullWidth, h: res.fullHeight };

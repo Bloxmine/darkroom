@@ -60,7 +60,8 @@ const styleFromImage = defineNode({
   cpu: async (ctx) => {
     const src = ctx.readInput('image');
     const sty = ctx.readInput('style');
-    if (!src || !sty) return { styled: empty() };
+    // Mix 0 = off (e.g. a preset toggle): pass the image through without downloading or running the model
+    if (!src || !sty || !(Number(ctx.params.mix ?? 1) > 0)) return { styled: empty() };
     const [w, h] = fitDims(src.width, src.height, Number(ctx.params.resolution) || 768, 8);
     const [sw, sh] = fitDims(sty.width, sty.height, Number(ctx.params.styleScale) || 512, 8);
     const rgb = resampleRGB(src.data, src.width, src.height, w, h);

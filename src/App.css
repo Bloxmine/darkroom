@@ -1745,3 +1745,4 @@ kbd {
 [data-swatch='auto'] .ts-view {
   background: linear-gradient(90deg, #404040 50%, #111 50%);
 }
+.sb-click { cursor: pointer; }

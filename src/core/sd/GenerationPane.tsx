@@ -6,6 +6,8 @@ import { useState, useSyncExternalStore } from 'react';
 import { setPref, useSettings } from '../../store/settings';
 import { Button, Note, PopUp, Row, Sep } from '../../ui/prefs/controls';
 import { corsHint, DEFAULT_URLS, getListState, isLocalUrl, SERVER_NAMES, subscribeLists, testConnection } from './client';
+import { hasCoreML } from './coreml';
+import { CoreMLPane } from './CoreMLPane';
 
 export function GenerationPane() {
   const s = useSettings();
@@ -13,7 +15,8 @@ export function GenerationPane() {
   const [err, setErr] = useState('');
   const kind = s.genServer;
   const urlKey = kind === 'a1111' ? 'genUrlA1111' : 'genUrlComfy';
-  const url = kind === 'off' ? '' : s[urlKey];
+  const url = kind === 'off' || kind === 'coreml' ? '' : s[urlKey];
+  const coreml = hasCoreML();
   const L = lists.lists;
   return (
     <div className="slp-form">
@@ -27,10 +30,16 @@ export function GenerationPane() {
             { value: 'off', label: 'Off' },
             { value: 'comfyui', label: 'ComfyUI' },
             { value: 'a1111', label: 'AUTOMATIC1111 (Forge, SD.Next API)' },
+            ...(coreml || kind === 'coreml' ? [{ value: 'coreml' as const, label: 'Core ML (built-in, this Mac)' }] : []),
           ]}
         />
       </Row>
-      {kind !== 'off' && (
+      {kind === 'coreml' && (coreml ? <CoreMLPane /> : (
+        <Row>
+          <Note>The built-in Core ML engine is only available in the Darkroom Mac app. Generate nodes stay off in the browser.</Note>
+        </Row>
+      ))}
+      {kind !== 'off' && kind !== 'coreml' && (
         <>
           <Row label="Server URL" top col>
             <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>

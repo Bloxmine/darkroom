@@ -101,11 +101,12 @@ const PANES: PaneDef[] = [
     label: 'Generation',
     icon: 'artwork',
     Comp: GenerationPane,
-    keys: ['genServer', 'genUrlComfy', 'genUrlA1111'],
+    keys: ['genServer', 'genUrlComfy', 'genUrlA1111', 'coremlUnits', 'coremlReduceMemory'],
     help: [
       'Generate (Stable Diffusion) nodes send a job to your own ComfyUI or AUTOMATIC1111 / Forge server and show the result. It is off by default.',
       'Nothing is sent until you choose a server here and press Generate on a node. Then the prompts and the images connected to that node go to this URL only.',
       'The server must allow requests from Darkroom (CORS). Test Connection lists its checkpoints and ControlNet models. Help › ControlNet has the launch commands.',
+      'In the Mac app, Core ML (built-in) runs SD 1.5-family models with ControlNet on this Mac (Neural Engine or GPU) — no server, nothing uploaded. Download models here; each shows its licence first.',
     ],
   },
   {
@@ -124,7 +125,7 @@ const PANES: PaneDef[] = [
     label: 'Advanced',
     icon: 'cog',
     Comp: AdvancedPane,
-    keys: ['showFps', 'showNodeIds'],
+    keys: ['showFps', 'showNodeIds', 'verboseDiagnostics', 'errorToasts'],
     help: [
       'Export your preferences to move them to another browser or computer, and import them there.',
       'Clearing the autosave means the current project won’t be restored at the next launch.',

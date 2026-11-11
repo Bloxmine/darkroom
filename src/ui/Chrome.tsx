@@ -1,4 +1,5 @@
 import { useRef, type ReactNode } from 'react';
+import { openDiagnostics } from '../core/diag';
 import { flattenGraph } from '../core/graph';
 import { effectiveViewed, useDoc } from '../store/doc';
 import { useUi } from '../store/ui';
@@ -72,7 +73,7 @@ export function StatusBar() {
         {ui.pending.length ? `Loading… (${ui.pending.length})` : ui.message}
       </span>
       {errCount > 0 && (
-        <span className="sb-pane sb-error" title={Object.entries(ui.errors).map(([k, v]) => `${k}: ${v}`).join('\n\n')}>
+        <span className="sb-pane sb-error sb-click" onClick={() => openDiagnostics()} title={'Click to open Diagnostics\n\n' + Object.entries(ui.errors).map(([k, v]) => `${k}: ${v}`).join('\n\n')}>
           <Icon name="exclamation" />
           {errCount} error{errCount > 1 ? 's' : ''}
         </span>

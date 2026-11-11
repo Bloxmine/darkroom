@@ -251,6 +251,143 @@ export COMMANDLINE_ARGS="--api --cors-allow-origins-regex=.*"
   Referer headers, answers CORS preflights and adds CORS response headers. Every other request is untouched, and with
   generation *Off* nothing is rewritten at all.
 
+## Core ML (built-in, Mac app)
+Choose **Core ML (built-in, this Mac)** as the server in Preferences › Generation. SD 1.5-family models then run on the
+Mac itself, through Apple's Core ML, with ControlNet. There is no server, no CORS, and nothing is uploaded. The option
+is absent in the browser / PWA build: a synced `genServer: 'coreml'` pref simply means *off* there.
+
+Why Core ML: AUTOMATIC1111 and ComfyUI cannot load Core ML models. Apple's
+[ml-stable-diffusion](https://github.com/apple/ml-stable-diffusion) (MIT) runs them on the Neural Engine or GPU.
+SDXL is deliberately not supported; the engine rejects SDXL models with a clear message.
+
+### Architecture
+- **`native/coreml-sd/`** is a Swift package with an executable target, `DarkroomCoreML`, shipped as
+  `darkroom-coreml`.
+  - It depends on `apple/ml-stable-diffusion`, pinned to release **1.1.1**
+    (`5a170d29cf38e674b80541d7ce22929c6a11cdde`).
+  - It uses only the package's public building blocks (BPETokenizer / TextEncoder, VAE Encoder / Decoder, PNDM and
+    DPM-Solver++ schedulers, ManagedMLModel) and runs **its own denoising loop**. That loop adds:
+    - **ControlNet weight and step range per unit.** The package's pipeline sums the residuals unweighted.
+    - **Inpainting.** A latent noise mask is applied every step, then a pixel composite outside the mask.
+    - **ControlNet inpaint convention.** Masked pixels are −1 in the control image (`maskedCond`).
+    - **One UNet for everything.** The *ControlledUnet* gets zero residuals when no ControlNet is active, so a model
+      needs only one UNet compiled and the plain `Unet.mlmodelc` (1.6 GB) is not even downloaded.
+    - **NumPy-compatible RNG.** Seeds match Apple's CLI and Mochi Diffusion.
+- **Protocol: JSON lines on stdin/stdout.**
+  - Requests are `{id, cmd, …}`. Replies are `{id, ok, result | error{code, message}}`. Events are `progress` and
+    `state`.
+  - Commands: `hello`, `listModels {roots}`,
+    `load {modelDir, computeUnits, controlNets[], reduceMemory, idleUnloadSeconds}`,
+    `generate {prompt, negative, seed, steps, guidance, scheduler: dpm++ | dpm++karras | pndm, startingImage,
+    strength, mask, controlNetInputs[{name, image, weight, start, end, maskedCond}], width, height}`, `cancel`,
+    `unload`, `status`, `shutdown`.
+  - Why stdio rather than a localhost socket with a token:
+    - nothing else on the machine can reach the helper (no port, no secret to leak);
+    - its lifetime is the parent's (stdin EOF = exit);
+    - there is nothing to configure or firewall.
+  - Framework `print()`s are redirected to stderr, so stdout carries only the protocol.
+- **Errors carry a `code`.**
+  - `attentionMismatch`: a split-einsum ControlNet with an original base, or the reverse.
+  - `wrongResolution`: a ControlNet or input image of another size.
+  - `noControlNetUnet`: the model was not converted with `--unet-support-controlnet`.
+  - `compiling`: a request arrived while the first load is still compiling.
+  - Also `unsupported` (SDXL, chunked iOS UNets), `notFound` and `cancelled`.
+- **States.**
+  - *First use compiles.* Each part reports `compiling`, and the AI toast says so; later loads are seconds.
+  - *Idle unload.* Model memory is freed after 5 idle minutes, and main quits the helper after 20.
+  - *Reduce memory.* The **Reduce memory use** checkbox loads each part only while it runs.
+- **Neural Engine placement check.** On macOS 14.4+ the helper asks Core ML's `MLComputePlan` where the UNet would run.
+  - On the test machine (M2 Pro, macOS 27.2), Core ML places neither SD 1.5 split-einsum UNet (plain or
+    ControlledUnet) on the Neural Engine. It falls back to the **CPU**, which is 3× slower than the GPU.
+  - In that case the helper gives just the UNet `cpuAndGPU`. The text encoder, VAE and ControlNets stay on the Neural
+    Engine.
+  - The load result and Preferences say so. `darkroom-coreml --compute-plan <x.mlmodelc> <units>` prints the
+    placement.
+- **Electron main.**
+  - `electron/coreml/engine.ts` spawns the helper on demand, runs one job at a time (later jobs queue; cancelling a
+    queued job drops it) and routes progress.
+  - `electron/coreml/downloads.ts` and `electron/coreml/zipfetch.ts` handle downloads. `electron/coreml/ipc.ts` holds
+    the IPC (`window.darkroomNative.coreml`, see docs/DESKTOP.md).
+  - The renderer sends only model ids and catalog ids, never paths. Extra folders come from a native folder picker.
+- **Models folders.**
+  - Darkroom's own folder is `~/Library/Application Support/Darkroom/coreml-models` (`<id>/` for base models,
+    `controlnet/<Name>.mlmodelc`).
+  - You can add folders, e.g. Mochi Diffusion's models and ControlNet folders. They are scanned to depth 3 by reading
+    each `metadata.json`.
+  - Resolution is the UNet `sample` shape × 8. Attention is *split-einsum* when the program uses `einsum` ops and
+    *original* when it uses `matmul`.
+- **Compiled cache.** Core ML caches compiled models in `~/Library/Caches/darkroom-coreml`, a few GB per model and
+  compute-unit combination. Preferences shows its size and can clear it.
+- **Packaging.**
+  - `scripts/build-electron.mjs` runs `swift build -c release --arch arm64 --arch x86_64`, which produces one
+    universal binary.
+  - The binary is copied to `dist-native/darkroom-coreml/` and ad-hoc signed (`codesign -s -`, like the app). A
+    `.json` beside it lists the slices.
+  - electron-builder ships it via `extraResources` (`Contents/Resources/darkroom-coreml/`). `mac.x64ArchFiles` lets
+    the already universal file pass the universal merge.
+  - Without a Swift toolchain, the build skips the helper and the app shows the engine as unavailable. Set
+    `DARKROOM_SKIP_COREML=1` to skip it on purpose.
+  - The x86_64 slice builds and runs. On Intel Macs Core ML uses CPU/GPU only (slow). Without the slice, the engine is
+    disabled on Intel with a message.
+  - The helper needs macOS 13.1 (an ml-stable-diffusion requirement). On 13.0 the engine is disabled with a message.
+
+### Models (curated downloads; none are bundled)
+Downloads run in Electron main, so CORS is irrelevant (Hugging Face sends permissive CORS anyway).
+- **Licence first.** Each download first shows the **CreativeML OpenRAIL-M** licence and its use restrictions, and
+  must be accepted.
+- **Only the needed parts.** Main reads the zip's central directory with an HTTP range request and fetches only the
+  entries it needs, inflating them as they stream in.
+- **Checked.** Every file's CRC-32 is compared with the zip directory.
+- **Resumable.** Finished files are remembered, and a stored entry resumes with a Range request. The folder appears
+  only when complete.
+
+| Item | Source (pinned) | Fetched |
+|---|---|---|
+| SD 1.5 · Neural Engine (split-einsum) 512² | `coreml-community/coreml-stable-diffusion-v1-5_cn@57b9414` `split_einsum/stable-diffusion-_v1-5_split-einsum_cn.zip` (3.58 GB zip) | 1.98 GB |
+| SD 1.5 · GPU (original) 512², 768×512, 512×768 | same repo, `original/…_cn.zip` | 1.98 GB each |
+| DreamShaper 8 · NE / GPU 512² | `coreml-community/cormel-DreamShaper-v8_cn@f8b9183` | 1.98 GB |
+| Realistic Vision 5.1 · NE / GPU 512² | `coreml-community/coreml-realisticVision-v51VAE_cn@3977db7` | 1.98 GB |
+| ControlNet 1.1 (canny, depth, softedge, lineart, lineart anime, openpose, scribble, tile, seg, normalbae, inpaint, mlsd, shuffle, ip2p) | `coreml-community/ControlNet-Models-For-Core-ML@2a21985` `CN/<Name>-SE.zip` (split-einsum 512²) or one resolution out of `CN/<Name>.zip` (original 5x5 / 5x7 / 7x5 / 7x7) | 671 MB each |
+
+The *ControlNets for* picker in Preferences offers the variant matching the chosen base model (attention + size).
+
+### Using it
+- **`sd.generate` on Core ML.**
+  - `checkpoint` is a model id (empty = the first ControlNet-capable SD 1.5 model).
+  - `cnNModel` accepts an id, a file name, or a **kind** (`canny`, `depth`, …). A kind picks the installed variant that
+    matches the model; the Core ML presets use kinds.
+  - The ControlNet preprocessor nodes provide the control images (standard conventions: white edges on black, near =
+    bright depth, …).
+  - Sampler `dpm++` (default), `dpm++ karras` or `pndm`.
+- **Fixed size.** Every input is fitted to the model's size by the node's **Fit** param:
+  - *letterbox* (default): the whole input fits, with a blurred fill for photos and black for maps; the result is
+    cropped back to the input's aspect.
+  - *crop*: the centre is generated at full model resolution, and the node outputs that crop.
+  - *stretch*: the input is squashed to the model size and the result stretched back.
+  - Width, height and base size are ignored on Core ML.
+- **Style** (any backend): a curated prompt snippet plus its negative.
+  - Choices: oil painting, watercolor, anime cel, pencil sketch, cinematic photo, pixel art, riso print, ink comic,
+    ukiyo-e, impressionist, charcoal, stained glass, low-poly 3d.
+- **Presets** (`src/presets/coreml.ts`, category *Core ML*):
+  - `coreml.restyle`: Style + img2img (0.7) + canny ControlNet (0.85), with an optional tile unit (weight 0 = off,
+    needs no model). Then the colours of an optional **reference** input (`color.matchColor`), then optional AdaIN
+    **Style from image** of the reference (`ai.styleFromImage`, mix 0 = off, no download).
+  - `coreml.depthRestyle`: the same, but with depth and img2img at 0.85.
+  - `coreml.sketchToImage`: scribble, txt2img.
+  - `coreml.poseTransfer`: OpenPose, txt2img.
+  - `coreml.inpaint`: image + mask → `control.inpaintMask` → latent-mask inpainting with the inpaint ControlNet.
+    Pixels outside the mask are kept exactly.
+- **Caching.** Results are cached like the other backends. The key adds fit and compute units.
+
+### Measured (M2 Pro 16 GB, macOS 27.2, SD 1.5 split-einsum `_cn` + Canny-SE, 512², 20 steps DPM++)
+| | First load (compile) | Warm load (new process) | txt2img 20 steps | img2img 0.75 + canny (15 steps) |
+|---|---|---|---|---|
+| Neural Engine (UNet on GPU, see above) | 37.4 s | 3.3 s | 10.4–12.0 s (≈1.95 it/s) | 10.9 s |
+| GPU | 7.2 s* | 5.3 s | 10.9–12.8 s (≈1.9 it/s) | 12.2–12.5 s |
+
+*The UNet's GPU compile was already cached by the Neural Engine run. Before the placement check, Neural Engine mode ran
+the UNet on the CPU at 0.65 it/s. ControlNet on the Neural Engine costs about 0.15 s per step.
+
 ## Presets (`src/presets/control.ts`)
 - **`control.allMaps`, *All Control Maps*:** one photo → a Control Sheet of canny, depth, normal (BAE), soft edge,
   OpenPose and ADE20K segmentation.
@@ -276,8 +413,34 @@ node scripts/snap.mjs out.png "preset=control.allMaps&img=street&wait=280"   # m
   PNG. The tests ran both through the harness and in the editor UI (Generate button, Test connection pickers, no
   re-generation on param tweaks).
 - **Real servers.** Testing against a real ComfyUI / A1111 is still pending; none was available on the test machine.
+- **Core ML.**
+  - `npx vitest run src/core/sd electron/coreml` covers the request builder, fitting, resolvers, catalog and styles,
+    plus the range-request zip extractor against a mock CDN (CRC checks, resume after a dropped connection, unsafe
+    paths).
+  - The helper speaks JSON lines, so it is easy to drive from a Node script (spawn, write requests, read replies).
+  - `DARKROOM_COREML_PROFILE=1` makes it print per-step ControlNet / UNet / mixing times to stderr.
+  - `darkroom-coreml --list <dir>` and `--compute-plan <x.mlmodelc> <units>` help with model problems.
+  - `DARKROOM_COREML_LOG=1` makes Electron main log every helper request.
+  - `localStorage['darkroom.debug.sd'] = '1'` traces every `sd.generate` cpu() decision (scale, key, input
+    fingerprint, hit / triggered) as `[darkroom sd] …`.
+- **Re-evaluation loop (fixed).**
+  - Symptom: exporting while a generated result was on screen made the viewer flicker and the export never finish.
+  - Cause: `exportBlob` polls the output at scale 1 in the engine's main cache namespace while the viewer rendered it
+    at preview scale. Each async cpu node's pending run was replaced by the other scale's, and each completion
+    re-invalidated the viewer (3,351 cpu() calls and a 300 s timeout in one test).
+  - Fix, part 1: `sd.generate` answers synchronously unless a generation is really in flight.
+  - Fix, part 2: `exportBlob` suspends viewer renders until the export is done, like video export does.
+  - Result: exactly one helper `generate` per Generate click, five cpu() calls in the whole scripted session
+    (generate, idle, view other nodes, Preferences, zoom, export), and the export took 0.3 s.
 
 ## Known gaps
+- **Core ML:**
+  - On this test machine Core ML will not place the SD 1.5 UNet on the Neural Engine, so it runs on the GPU. This may
+    differ on other macOS versions and Macs; the placement check adapts.
+  - Only SD 1.5-family models (SD 2.x without ControlNet). No SDXL, no IP-Adapter.
+  - The fixed model size means letterboxed photos use part of the 512² canvas. Use the 768×512 GPU model for 3:2
+    photos.
+  - The x86_64 helper builds but was not run on an Intel Mac.
 - **Soft edge is an approximation.** Use *safe* mode or Canny if a ControlNet softedge model over-reacts to texture.
   It becomes exact as soon as a permissively licensed HED/PiDiNet ONNX exists.
 - **M-LSD is the tiny model**, not large.
@@ -289,10 +452,12 @@ node scripts/snap.mjs out.png "preset=control.allMaps&img=street&wait=280"   # m
 - **Seg covers about 70 ADE20K classes** (COCO-panoptic vocabulary). There is no COCO-palette mode for the
   OneFormer-COCO seg model.
 - **Inpaint:**
-  - `control.inpaintMask` formats masks, but the ControlNet *inpaint* unit (masked pixels = −1) is not built
-    automatically.
+  - On ComfyUI / A1111, `control.inpaintMask` formats masks, but the ControlNet *inpaint* unit (masked pixels = −1) is
+    not built automatically. The built-in Core ML engine does build it (`maskedCond`).
   - Use `sd.generate`'s `mask` input for normal img2img inpainting, or wire *Masked image (transparent)* into a unit
     when your UI reads alpha.
+- **Core ML first-load label.** The “compiling (first use)” label comes from markers in the app's user-data folder.
+  A fresh profile shows it even when Core ML's own cache is warm; the load is then quick anyway.
 - **Result cache.**
   - The cache is in memory: after a reload a node shows *Press Generate* until it runs again.
   - Results are not saved in the project. Export or save the image.

@@ -9,6 +9,7 @@
 import { loadPrefs } from '../../store/prefs';
 import { buildA1111Payload } from './a1111';
 import { buildComfyWorkflow, COMFY_OUTPUT_NODE } from './comfy';
+import { controlNetKind, hasCoreML, refreshCoreMLList } from './coreml';
 import type { GenSpec, ServerKind, ServerLists } from './types';
 
 export interface ServerConfig {
@@ -16,13 +17,15 @@ export interface ServerConfig {
   url: string;
 }
 
-export const DEFAULT_URLS: Record<ServerKind, string> = { comfyui: 'http://127.0.0.1:8188', a1111: 'http://127.0.0.1:7860' };
-export const SERVER_NAMES: Record<ServerKind, string> = { comfyui: 'ComfyUI', a1111: 'AUTOMATIC1111' };
+export const DEFAULT_URLS: Record<ServerKind, string> = { comfyui: 'http://127.0.0.1:8188', a1111: 'http://127.0.0.1:7860', coreml: 'built-in' };
+export const SERVER_NAMES: Record<ServerKind, string> = { comfyui: 'ComfyUI', a1111: 'AUTOMATIC1111', coreml: 'Core ML' };
 
 /** The configured server, or null when generation is off (the default). */
 export function serverConfig(): ServerConfig | null {
   const p = loadPrefs();
   if (p.genServer === 'off') return null;
+  // the built-in engine exists only in the Mac app; a synced 'coreml' pref means "off" in the browser
+  if (p.genServer === 'coreml') return hasCoreML() ? { kind: 'coreml', url: 'built-in' } : null;
   const kind = p.genServer;
   const url = (kind === 'comfyui' ? p.genUrlComfy : p.genUrlA1111).trim() || DEFAULT_URLS[kind];
   return { kind, url: url.replace(/\/+$/, '') };
@@ -115,6 +118,24 @@ const comfyOptions = (info: ObjectInfo, node: string, input: string): string[] =
 };
 
 export async function fetchLists(cfg: ServerConfig): Promise<ServerLists> {
+  if (cfg.kind === 'coreml') {
+    const l = await refreshCoreMLList();
+    const res = (w: number, h: number) => (w === h ? `${w}²` : `${w}×${h}`);
+    const att = (a: string) => (a === 'splitEinsum' ? 'Neural Engine' : a === 'original' ? 'GPU' : '?');
+    const labels: Record<string, string> = {};
+    for (const m of l.models) labels[m.id] = `${m.name} · ${res(m.width, m.height)} · ${att(m.attention)}${m.controlNetSupport ? '' : ' · no ControlNet'}${m.kind === 'sdxl' ? ' · SDXL (unsupported)' : ''}`;
+    for (const c of l.controlNets) labels[c.id] = `${c.name} · ${controlNetKind(c) ?? '?'} · ${res(c.width, c.height)} · ${att(c.attention)}`;
+    // kind keywords (“canny”) pick the variant matching the model automatically
+    const kinds = [...new Set(l.controlNets.map(controlNetKind).filter((k): k is NonNullable<typeof k> => !!k))];
+    for (const k of kinds) labels[k] = `${k} — auto (matches the model)`;
+    return {
+      checkpoints: l.models.filter((m) => m.kind !== 'sdxl').map((m) => m.id),
+      controlnets: [...kinds, ...l.controlNets.map((c) => c.id)],
+      samplers: ['dpm++', 'dpm++ karras', 'pndm'],
+      schedulers: [],
+      labels,
+    };
+  }
   if (cfg.kind === 'comfyui') {
     const [ck, cn, ks] = await Promise.all([
       json<ObjectInfo>(cfg, '/object_info/CheckpointLoaderSimple', undefined, 10000),
@@ -172,12 +193,16 @@ function setLists(s: ListState) {
 
 /** Test the connection: fetches checkpoints / ControlNets / samplers / schedulers and remembers them for the pickers. */
 export async function testConnection(cfg: ServerConfig | null = serverConfig()): Promise<ServerLists> {
-  if (!cfg) throw new SdError('Generation is off. Choose ComfyUI or AUTOMATIC1111 in Preferences › Generation.');
+  if (!cfg) throw new SdError('Generation is off. Choose a server or the built-in Core ML engine in Preferences › Generation.');
   const server = `${cfg.kind} ${cfg.url}`;
   setLists({ ...listState, status: 'testing', message: undefined });
   try {
     const lists = await fetchLists(cfg);
-    setLists({ server, lists, status: 'ok', message: `Connected to ${SERVER_NAMES[cfg.kind]}: ${lists.checkpoints.length} checkpoints, ${lists.controlnets.length} ControlNet models.` });
+    const msg =
+      cfg.kind === 'coreml'
+        ? `Core ML (built-in): ${lists.checkpoints.length} models, ${lists.controlnets.filter((c) => c.includes(':')).length} ControlNets installed.`
+        : `Connected to ${SERVER_NAMES[cfg.kind]}: ${lists.checkpoints.length} checkpoints, ${lists.controlnets.length} ControlNet models.`;
+    setLists({ server, lists, status: 'ok', message: msg });
     try {
       localStorage.setItem(LISTS_KEY, JSON.stringify({ server, lists }));
     } catch {
@@ -213,6 +238,7 @@ const b64 = async (blob: Blob) => {
  * the A1111 request); a ComfyUI job that has not started yet is also removed from the server's queue.
  */
 export async function generate(cfg: ServerConfig, spec: GenSpec<null>, images: GenImages, progress: GenProgress, signal?: AbortSignal): Promise<Blob> {
+  if (cfg.kind === 'coreml') throw new SdError('Core ML jobs run through src/core/sd/coreml.ts (runCoreML).');
   return cfg.kind === 'comfyui' ? generateComfy(cfg, spec, images, progress, signal) : generateA1111(cfg, spec, images, progress, signal);
 }
 

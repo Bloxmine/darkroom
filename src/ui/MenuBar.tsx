@@ -168,7 +168,7 @@ export const MENUS: { title: string; items: () => MenuItem[] }[] = [
   },
   {
     title: 'Window',
-    items: () => [{ cmd: 'view.library' }, { cmd: 'view.properties' }, { sep: true }, { cmd: 'edit.plugins' }],
+    items: () => [{ cmd: 'view.library' }, { cmd: 'view.properties' }, { sep: true }, { cmd: 'edit.plugins' }, { cmd: 'view.diagnostics' }],
   },
   {
     title: 'Help',

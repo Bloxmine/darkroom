@@ -6,6 +6,7 @@ import { setNodeThumbnails, setTheme, THEMES, useSettings } from '../store/setti
 import { openDialog, status, useUi } from '../store/ui';
 import { zoomViewer } from './viewerApi';
 import { openDocs } from './docs/docs';
+import { closeDiagnostics, openDiagnostics, useDiag } from '../core/diag';
 import { canEditInBuilder, exportNodeType, importNodeFile, openNodeBuilder } from '../store/extensions';
 import * as T from '../store/timeline';
 import * as GE from '../store/graphEdit';
@@ -252,6 +253,7 @@ def({
 });
 
 // Help
+def({ id: 'view.diagnostics', label: 'Diagnostics', icon: 'bug', keys: 'Ctrl+Alt+D', run: () => (useDiag.getState().open ? closeDiagnostics() : openDiagnostics()), checked: () => useDiag.getState().open });
 def({ id: 'help.docs', label: 'Darkroom Help', icon: 'book_open', run: () => openDocs() });
 def({ id: 'help.shortcuts', label: 'Keyboard Shortcuts', icon: 'keyboard', keys: 'F1', run: () => openDialog('shortcuts') });
 def({ id: 'help.about', label: 'About Darkroom…', icon: 'information', run: () => openDialog('about') });

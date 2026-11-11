@@ -102,6 +102,18 @@ const UNIFORM_TYPES: Partial<Record<ParamDef['type'], string>> = {
 };
 
 /**
+ * Optional observers for diagnostics (src/core/diag.ts). The engine never depends on them; they are
+ * called synchronously and must be cheap.
+ */
+export const engineHooks: {
+  onCpuStart?: (nodeId: string, type: string, key: string) => void;
+  onCpuDone?: (nodeId: string, type: string, ms: number) => void;
+  onCpuError?: (nodeId: string, type: string, error: unknown) => void;
+  onCpuCancel?: (nodeId: string, type: string) => void;
+  onNodeError?: (nodeId: string, type: string, message: string) => void;
+} = {};
+
+/**
  * The graph evaluator. Owns a WebGL2 context on `canvas`, caches every node's
  * output texture and only re-renders nodes whose inputs/params changed.
  */
@@ -232,8 +244,10 @@ export class Engine {
         else res = this.evalNode(node, incoming.get(id) ?? new Map(), (src) => (nodes.has(src) ? evalNode(src) : null), scale, projectSize);
         if (res && this.errors.get(id)?.startsWith('[pending]')) this.errors.delete(id); // keep the marker while async cpu() is pending (renderReady / ui.pending rely on it)
       } catch (e) {
-        this.errors.set(id, e instanceof ShaderCompileError ? e.log : String((e as Error)?.message ?? e));
-        if (e instanceof ShaderCompileError) console.warn(`[darkroom] ${node.type}:`, e.log);
+        const msg = e instanceof ShaderCompileError ? e.log : String((e as Error)?.message ?? e);
+        if (this.errors.get(id) !== msg) engineHooks.onNodeError?.(id, node.type, msg); // once per new error
+        this.errors.set(id, msg);
+        if (e instanceof ShaderCompileError) console.debug(`[darkroom] ${node.type}:`, e.log); // surfaced via engineHooks.onNodeError
         res = null;
       }
       visiting.delete(id);
@@ -444,9 +458,14 @@ export class Engine {
   ) {
     const cpu = this.cpu; // the active namespace's map (async results must land there)
     const old = cpu.get(node.id);
-    if (old?.status === 'pending') old.ctl?.abort(); // a newer run replaces it
+    if (old?.status === 'pending') {
+      old.ctl?.abort(); // a newer run replaces it
+      engineHooks.onCpuCancel?.(node.id, node.type);
+    }
     const entry: CpuEntry = { key, status: 'pending', textures: old?.textures ?? {}, ctl: new AbortController() };
     cpu.set(node.id, entry);
+    const started = performance.now();
+    engineHooks.onCpuStart?.(node.id, node.type, key);
     const finish = (res: Record<string, TexSource>) => {
       if (cpu.get(node.id) !== entry) return; // superseded
       const textures: Record<string, Tex> = {};
@@ -454,11 +473,13 @@ export class Engine {
       for (const [k, t] of Object.entries(entry.textures)) if (!(k in res)) this.gl.destroy(t);
       entry.textures = textures;
       entry.status = 'done';
+      engineHooks.onCpuDone?.(node.id, node.type, performance.now() - started);
     };
     const fail = (e: unknown) => {
       if (cpu.get(node.id) !== entry) return;
       entry.status = 'error';
       entry.error = String((e as Error)?.message ?? e);
+      if ((e as Error)?.name !== 'AbortError') engineHooks.onCpuError?.(node.id, node.type, e);
     };
     try {
       const r = def.cpu!({

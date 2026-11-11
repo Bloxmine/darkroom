@@ -1,0 +1,190 @@
+/* Diagnostics window + error notifications. Theme tokens only (classic / aperture / aqua). */
+.diag-toasts {
+  position: fixed;
+  right: 14px;
+  bottom: 34px;
+  z-index: 1700;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(380px, 90vw);
+}
+.diag-toast {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 9px 10px;
+  border: 1px solid var(--lo);
+  border-left: 4px solid var(--error);
+  border-radius: 4px;
+  background: var(--field);
+  color: var(--text);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
+  font-size: 12px;
+  animation: diag-in 0.18s ease-out;
+}
+.diag-toast.warn {
+  border-left-color: #d49a1f;
+}
+@keyframes diag-in {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+}
+.diag-toast-body {
+  flex: 1;
+  min-width: 0;
+}
+.diag-toast-title {
+  font-weight: bold;
+  margin-bottom: 2px;
+}
+.diag-toast-msg {
+  max-height: 5.2em;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+}
+.diag-toast-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.diag-toast-close {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: default;
+}
+
+.diag-win {
+  position: fixed;
+  z-index: 1650;
+  top: 10vh;
+  left: calc(50vw - min(430px, 46vw));
+  width: min(860px, 92vw);
+  height: min(560px, 80vh);
+  min-width: 480px;
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  resize: both;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+}
+.diag-toolbar,
+.diag-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  background: var(--face);
+}
+.diag-toolbar {
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.diag-foot {
+  border-top: 1px solid var(--line);
+}
+.diag-foot .grow {
+  flex: 1;
+}
+.diag-lvl {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.diag-count {
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 7px;
+  background: var(--face-2);
+  color: var(--muted);
+  font-size: 10px;
+  text-align: center;
+}
+.diag-lvl.error .diag-count {
+  color: var(--error);
+}
+.diag-search {
+  flex: 1;
+  min-width: 120px;
+}
+.diag-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--field);
+  font-family: var(--mono);
+  font-size: 11px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.diag-empty {
+  padding: 18px;
+  color: var(--muted);
+  font-family: var(--font);
+}
+.diag-row {
+  display: grid;
+  grid-template-columns: 64px 18px 64px 1fr;
+  gap: 6px;
+  align-items: start;
+  padding: 3px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
+}
+.diag-row:hover {
+  background: var(--hover);
+}
+.diag-row.error {
+  color: var(--error);
+}
+.diag-row.warn {
+  color: #b5790f;
+}
+.diag-row.debug {
+  color: var(--muted);
+}
+.diag-row.focus {
+  outline: 2px solid var(--sel);
+  outline-offset: -2px;
+}
+.diag-time,
+.diag-src {
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.diag-msg {
+  overflow-wrap: anywhere;
+}
+.diag-rep {
+  margin-left: 6px;
+  padding: 0 4px;
+  border-radius: 6px;
+  background: var(--face-2);
+  color: var(--muted);
+}
+.diag-node {
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--face);
+  color: var(--sel);
+  font: inherit;
+  cursor: pointer;
+}
+.diag-detail {
+  margin: 4px 0 2px;
+  padding: 6px 8px;
+  white-space: pre-wrap;
+  border-left: 2px solid var(--line);
+  background: var(--face-2);
+  color: var(--text);
+}
